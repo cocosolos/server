@@ -3,7 +3,7 @@ if(NOT WIN32)
     CPMAddPackage(
         NAME mariadb-connector-cpp
         GITHUB_REPOSITORY mariadb-corporation/mariadb-connector-cpp
-        GIT_TAG b09555de99ed4b1d054a88ff85acbae996bce1d1
+        GIT_TAG a36ff95ac6a6236a2faaaa6ec710219c8aabe35d # 1.0.5
         DOWNLOAD_ONLY YES
     )
     if(mariadb-connector-cpp_ADDED)

@@ -1,0 +1,7 @@
+# Nothing tracked by git should be in here.
+# Keeps git hash clean during build.
+build
+log/*.log
+settings/*.lua
+sql/backups/*.sql
+tools/config.yaml
