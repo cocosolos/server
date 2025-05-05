@@ -1,0 +1,128 @@
+name: publish_latest
+
+on:
+  push:
+    branches:
+      - base
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  Build_Packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu
+            dockerfile: ./docker/ubuntu.Dockerfile
+            package-cache-path: |
+              var-cache-apt
+              var-lib-apt
+              xiadmin-cache-pip
+            build-cache-path: |
+              xiadmin-build
+              xiadmin-ccache
+            cache-map: |
+              {
+                "var-cache-apt": "/var/cache/apt",
+                "var-lib-apt": "/var/lib/apt",
+                "xiadmin-cache-pip": "/xiadmin/.cache/pip",
+                "xiadmin-build": "/xiadmin/build",
+                "xiadmin-ccache": "/xiadmin/.ccache"
+              }
+          - os: alpine
+            dockerfile: ./docker/alpine.Dockerfile
+            package-cache-path: |
+              var-cache-apk
+              xiadmin-cache-pip-alpine
+            build-cache-path: |
+              xiadmin-build-alpine
+              xiadmin-ccache-alpine
+            cache-map: |
+              {
+                "var-cache-apk": "/var/cache/apk",
+                "xiadmin-cache-pip-alpine": "/xiadmin/.cache/pip",
+                "xiadmin-build-alpine": "/xiadmin/build",
+                "xiadmin-ccache-alpine": "/xiadmin/.ccache"
+              }
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha
+          labels: |
+            org.opencontainers.image.authors=LandSandBoat Dev Teams
+            org.opencontainers.image.title=LandSandBoat Server (${{ matrix.os }})
+            org.opencontainers.image.documentation=https://github.com/LandSandBoat/server/wiki
+          flavor: ${{ matrix.os != 'ubuntu' && format('suffix=-{0},onlatest=true', matrix.os) || '' }}
+
+      - name: Cache packages
+        id: package-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.package-cache-path }}
+          key: packagecache-${{ matrix.os }}-${{ hashFiles(matrix.dockerfile) }}
+          restore-keys: |
+            packagecache-${{ matrix.os }}-
+
+      - name: Cache build
+        id: build-cache
+        uses: actions/cache@v4
+        env:
+          build-hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        with:
+          path: ${{ matrix.build-cache-path }}
+          key: buildcache-${{ matrix.os }}-${{ env.build-hash }}-${{ github.ref_name }}
+          restore-keys: |
+            buildcache-${{ matrix.os }}-${{ env.build-hash }}
+
+      # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
+      - name: Inject cache
+        uses: reproducible-containers/buildkit-cache-dance@v3.2.0
+        with:
+          cache-map: ${{ matrix.cache-map }}
+          skip-extraction: ${{ steps.package-cache.outputs.cache-hit && steps.build-cache.outputs.cache-hit }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        env:
+          BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          platforms: linux/amd64
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}-buildcache:${{ matrix.os }}-${{ github.ref_name }}
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}-buildcache:${{ matrix.os }}-${{ github.ref_name }},mode=max
+          build-args: |
+            COMPILER=gcc
+            CMAKE_BUILD_TYPE=Release
+            REPO_URL=https://github.com/${{ github.repository }}.git
+            BRANCH_NAME=${{ github.ref_name }}
