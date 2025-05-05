@@ -1,0 +1,585 @@
+name: ci
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+# # Available machines:
+# # https://github.com/actions/runner-images/tree/main
+jobs:
+  Sanity_Checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run tests
+        run: |
+          docker run \
+          --mount type=bind,src=.,dst=/server \
+          --rm ghcr.io/${{ github.repository_owner }}/devtools:ubuntu \
+          /bin/bash -c 'export PYTHONPATH=$(su - xiadmin -c "python3 -m site --user-site") && /server/tools/ci/main.sh'
+
+  # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
+  Build_Linux:
+    needs: Sanity_Checks
+    runs-on: ubuntu-latest
+    env:
+      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu
+            compiler: gcc
+            build_type: Release
+          - os: ubuntu
+            compiler: clang
+            build_type: RelWithDebInfo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+          labels: |
+            org.opencontainers.image.authors=LandSandBoat Dev Teams
+            org.opencontainers.image.title=LandSandBoat Server (${{ matrix.os }})
+            org.opencontainers.image.documentation=https://github.com/LandSandBoat/server/wiki
+          flavor: ${{ format('suffix=-{0}', matrix.compiler) }}
+
+      - name: Restore packages cache
+        uses: actions/cache/restore@v4
+        env:
+          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
+        with:
+          path: |
+            ${{ format('var-cache-{0}', env.package_manager) }}
+            ${{ format('cache-pip-{0}', matrix.os) }}
+            ${{ matrix.os == 'ubuntu' && 'var-lib-apt' || '' }}
+          key: packagecache-${{ matrix.os }}-${{ env.hash }}-${{ github.base_ref }}
+          restore-keys: |
+            packagecache-${{ matrix.os }}-${{ env.hash }}-
+            packagecache-${{ matrix.os }}-
+
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        env:
+          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        with:
+          path: |
+            ${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}
+            ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}
+          key: buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ github.base_ref }}
+          restore-keys: |
+            buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-${{ matrix.build_type }}-
+            buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-
+
+      # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
+      - name: Inject cache
+        uses: reproducible-containers/buildkit-cache-dance@v3.2.0
+        with:
+          cache-map: |
+            {
+              "${{ format('var-cache-{0}', env.package_manager) }}":
+                {
+                  "target": "${{ format('/var/cache/{0}', env.package_manager) }}",
+                  "id": "${{ format('var-cache-{0}', env.package_manager) }}"
+                },
+              "${{ format('var-lib-{0}', env.package_manager) }}":
+                {
+                  "target": "${{ format('/var/lib/{0}', env.package_manager) }}",
+                  "id": "${{ format('var-lib-{0}', env.package_manager) }}"
+                },
+              "${{ format('cache-pip-{0}', matrix.os) }}":
+                {
+                  "target": "/xiadmin/.cache/pip",
+                  "id": "${{ format('cache-pip-{0}', matrix.os) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                },
+              "${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}":
+                {
+                  "target": "/xiadmin/build",
+                  "id": "${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                },
+              "${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}":
+                {
+                  "target": "/xiadmin/.ccache",
+                  "id": "${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                }
+            }
+          skip-extraction: true
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        env:
+          BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
+        with:
+          context: .
+          file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          platforms: linux/amd64
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/buildcache:server-${{ github.base_ref }}-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
+          build-args: |
+            COMPILER=${{ matrix.compiler }}
+            CMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            REPO_URL=${{ github.server_url }}/${{ github.repository }}.git
+            BRANCH=${{ github.head_ref }}
+
+
+  # Linux_ClangTidy18_64bit:
+  #   needs: Sanity_Checks
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 1
+  #     - name: Install Dependencies
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y software-properties-common cmake libmariadb-dev-compat libluajit-5.1-dev libzmq3-dev zlib1g-dev libssl-dev binutils-dev
+  #     - name: Cache 'build' folder
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: build
+  #         key: ${{ runner.os }}-clang-tidy
+  #     - name: Configure CMake
+  #       run: |
+  #         export CC=/usr/bin/clang-18
+  #         export CXX=/usr/bin/clang++-18
+  #         mkdir -p build
+  #         cmake -S . -B build -DENABLE_CLANG_TIDY=ON
+  #     - name: Build
+  #       run: |
+  #         touch clang-tidy.txt
+  #         cmake --build build -j4 >> clang-tidy.txt || true
+  #         cat clang-tidy.txt
+  #         if grep -q warning\|error clang-tidy.txt; then
+  #             exit 1
+  #         fi
+
+  # Full_Startup_Checks_Linux:
+  #   runs-on: ubuntu-24.04
+  #   needs: Linux_Clang18_64bit
+  #   services:
+  #     mysql:
+  #       image: mariadb:10.6
+  #       env:
+  #         MYSQL_DATABASE: xidb
+  #         MYSQL_ROOT_PASSWORD: root
+  #       ports:
+  #         - 3306:3306
+  #       options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=10s --health-retries=10
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 1
+  #         submodules: recursive # For navmeshes
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: linux_executables
+  #         path: .
+  #     - name: Install Dependencies
+  #       # TODO: Properly use python venv
+  #       run: |
+  #         python3 -m pip config set global.break-system-packages true
+  #         sudo apt-get update
+  #         sudo apt-get install -y software-properties-common cmake mariadb-client libmariadb-dev-compat libluajit-5.1-dev libzmq3-dev zlib1g-dev libssl-dev luarocks binutils-dev
+  #         python3 -m pip install -r tools/requirements.txt
+  #     - name: Verify MySQL connection from container
+  #       run: |
+  #         mysql -h 127.0.0.1 -uroot -proot -e "SHOW DATABASES"
+  #     - name: Import SQL files
+  #       shell: bash
+  #       run: |
+  #         python3 ./tools/dbtool.py setup
+  #     - name: Copy settings
+  #       run: |
+  #         cp settings/default/* settings/
+  #     - name: Startup and character login checks
+  #       run: |
+  #         chmod +x xi_connect
+  #         chmod +x xi_map
+  #         chmod +x xi_search
+  #         chmod +x xi_world
+  #         ls -l
+
+  #         printf "\nStart server processes\n"
+  #         screen -d -m -S xi_connect ./xi_connect --log login-server.log
+  #         screen -d -m -S xi_search ./xi_search --log search-server.log
+  #         screen -d -m -S xi_map ./xi_map --log map-server.log
+  #         screen -d -m -S xi_world ./xi_world --log world-server.log
+
+  #         printf "\nWaiting 5m for servers to fully start up\n"
+  #         sleep 300s
+
+  #         # define bash helper function to help diagnose any sql errors
+  #         function mysqlcmd() { mysql xidb -h 127.0.0.1 -uroot -proot --verbose -e "$@"; }
+  #         printf "\nPopulating database\n"
+
+  #         # Clean out anything already there (just in case)
+  #         mysqlcmd "DELETE FROM accounts;"
+  #         mysqlcmd "DELETE FROM chars;"
+  #         mysqlcmd "DELETE FROM char_look;"
+  #         mysqlcmd "DELETE FROM char_stats;"
+
+  #         # Clean tables that are made from triggers on insert to char table
+  #         mysqlcmd "DELETE FROM char_equip;"
+  #         mysqlcmd "DELETE FROM char_exp;"
+  #         mysqlcmd "DELETE FROM char_history;"
+  #         mysqlcmd "DELETE FROM char_inventory;"
+  #         mysqlcmd "DELETE FROM char_jobs;"
+  #         mysqlcmd "DELETE FROM char_pet;"
+  #         mysqlcmd "DELETE FROM char_points;"
+  #         mysqlcmd "DELETE FROM char_profile;"
+  #         mysqlcmd "DELETE FROM char_storage;"
+  #         mysqlcmd "DELETE FROM char_unlocks;"
+
+  #         # Create an account
+  #         PASSWORD_HASH=\$2a\$12\$piFoDKvu80KK68xLgQFpt.ZCqVPTjPmhSUfA31.Yw9n404dTsrR6q
+  #         mysqlcmd "INSERT INTO accounts (id, login, password, timecreate, timelastmodify, status, priv)
+  #         VALUES(1000, 'admin1', '$PASSWORD_HASH', NOW(), NOW(), 1, 1);
+  #         SELECT id, login, content_ids FROM accounts;"
+
+  #         # Create a character
+  #         mysqlcmd "INSERT INTO chars (charid, accid, charname, pos_zone, nation, gmlevel)
+  #         VALUES(1, 1000, 'Test', 0, 0, 5);
+  #         SELECT charid, accid, charname, pos_zone FROM chars;"
+
+  #         # Set char_look (default is 0 and trips up scripting)
+  #         mysqlcmd "INSERT INTO char_look (charid, face, race, size, head, body, hands, legs, feet, main, sub, ranged)
+  #         VALUES (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+  #         SELECT charid, face, race FROM char_look;"
+
+  #         # Populate more char tables with defaults
+  #         mysqlcmd "INSERT INTO char_stats (charid, mjob)
+  #         VALUES(1, 1);
+  #         SELECT charid, mjob FROM char_stats;"
+
+  #         # Update character information
+  #         # Place near some Robber Crabs in Kuftal Tunnel
+  #         mysqlcmd "UPDATE chars
+  #         SET
+  #             pos_zone = 174,
+  #             pos_prevzone = 174,
+  #             pos_x = 55,
+  #             pos_y = -9,
+  #             pos_z = -140
+  #         WHERE charid = 1;"
+
+  #         mysqlcmd "SELECT charid, accid, charname, pos_zone, pos_x, pos_y, pos_z FROM chars;"
+  #         # Set GodMode CharVar = 1
+  #         mysqlcmd "INSERT INTO char_vars(charid, varname, value)
+  #         VALUES(1, 'GodMode', 1);"
+
+  #         printf "\nRunning HeadlessXI for 60 seconds\n"
+  #         python3 << EOF
+  #         import time
+  #         try:
+  #             from tools.headlessxi.hxiclient import HXIClient
+  #             hxi_client = HXIClient('admin1', 'admin1', 'localhost')
+  #             hxi_client.login()
+  #             print('Sleeping 60s')
+  #             time.sleep(60)
+  #             hxi_client.logout()
+  #             exit(0)
+  #         except Exception as e:
+  #             exit(-1)
+  #         EOF
+  #         hxi_result=$?
+
+  #         pkill -SIGINT xi_map
+  #         pkill -SIGINT xi_search
+  #         pkill -SIGINT xi_connect
+  #         pkill -SIGINT xi_world
+
+  #         # fail if hxi had a non-zero exit code
+  #         if [[ "$hxi_result" -ne "0" ]]; then
+  #             echo "hxi exited with code $hxi_result"
+  #             exit $hxi_result
+  #         fi
+  #     - name: Check for errors and warnings
+  #       if: ${{ success() || failure() }}
+  #       run: |
+  #         cat login-server*.log
+  #         cat map-server*.log
+  #         cat search-server*.log
+  #         cat world-server*.log
+
+  #         if grep -qi "warning\|error\|crash" login-server*.log; then
+  #             exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" map-server*.log; then
+  #             exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" search-server*.log; then
+  #             exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" world-server*.log; then
+  #             exit -1
+  #         fi
+
+  # MultiInstance_Startup_Checks_Linux:
+  #   runs-on: ubuntu-24.04
+  #   needs: Linux_Clang18_64bit
+  #   services:
+  #     mysql:
+  #       image: mariadb:10.6
+  #       env:
+  #         MYSQL_DATABASE: xidb
+  #         MYSQL_ROOT_PASSWORD: root
+  #       ports:
+  #         - 3306:3306
+  #       options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=10s --health-retries=10
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 1
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: linux_executables
+  #         path: .
+  #     - name: Install Dependencies
+  #       # TODO: Properly use python venv
+  #       run: |
+  #         python3 -m pip config set global.break-system-packages true
+  #         sudo apt-get update
+  #         sudo apt-get install -y software-properties-common cmake mariadb-client libmariadb-dev-compat libluajit-5.1-dev libzmq3-dev zlib1g-dev libssl-dev luarocks binutils-dev
+  #         python3 -m pip install -r tools/requirements.txt
+  #     - name: Verify MySQL connection from container
+  #       run: |
+  #         mysql -h 127.0.0.1 -uroot -proot -e "SHOW DATABASES"
+  #     - name: Import SQL files
+  #       shell: bash
+  #       run: |
+  #         python3 ./tools/dbtool.py setup
+  #     - name: Assign odd zones a different port
+  #       run: |
+  #         mysql xidb -h 127.0.0.1 -uroot -proot -e "UPDATE xidb.zone_settings SET zoneport = 54231 WHERE zoneid % 2 = 0;"
+  #     - name: Copy settings
+  #       run: |
+  #         cp settings/default/* settings/
+  #     - name: Startup checks
+  #       env:
+  #         MYSQL_HOST: mysql
+  #       run: |
+  #         chmod +x xi_connect
+  #         chmod +x xi_map
+  #         chmod +x xi_search
+  #         chmod +x xi_world
+  #         ls -l
+
+  #         printf "\nStart server processes\n"
+  #         screen -d -m -S xi_connect ./xi_connect --log login-server.log
+  #         screen -d -m -S xi_search ./xi_search --log search-server.log
+  #         screen -d -m -S xi_map ./xi_map --log map-server-0.log --ip 127.0.0.1 --port 54230
+  #         screen -d -m -S xi_map ./xi_map --log map-server-1.log --ip 127.0.0.1 --port 54231
+  #         screen -d -m -S xi_world ./xi_world --log world-server.log
+  #         sleep 300s
+  #         killall screen
+  #     - name: Check for errors and warnings
+  #       if: ${{ success() || failure() }}
+  #       run: |
+  #         cat login-server*.log
+  #         cat search-server*.log
+  #         cat map-server-0*.log
+  #         cat map-server-1*.log
+  #         cat world-server*.log
+
+  #         if grep -qi "warning\|error\|crash" login-server*.log; then
+  #             exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" search-server*.log; then
+  #             exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" map-server-0*.log; then
+  #             exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" map-server-1*.log; then
+  #           exit -1
+  #         fi
+
+  #         if grep -qi "warning\|error\|crash" world-server*.log; then
+  #           exit -1
+  #         fi
+
+  # https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md
+  Build_Windows:
+    needs: Sanity_Checks
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tracy: off
+            modules: false
+            build_type: RelWithDebInfo
+          - tracy: on
+            modules: true
+            build_type: Release
+    steps:
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Restore build cache
+        uses: actions/cache/restore@v4
+        env:
+          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        with:
+          path: build
+          key: buildcache-windows-${{ env.hash }}${{ matrix.modules && '-modules' || '' }}${{ matrix.tracy == 'on' && '-tracy' || '' }}-${{ matrix.build_type }}-${{ github.base_ref }}
+          restore-keys: |
+            buildcache-windows-${{ env.hash }}${{ matrix.modules && '-modules' || '' }}${{ matrix.tracy == 'on' && '-tracy' || '' }}-${{ matrix.build_type }}-
+            buildcache-windows-${{ env.hash }}${{ matrix.modules && '-modules' || '' }}${{ matrix.tracy == 'on' && '-tracy' || '' }}-${{ matrix.build_type }}-
+      - name: Enable Modules
+        if: ${{ matrix.modules }}
+        shell: bash
+        run: |
+          python3 << EOF
+          with open("modules/init.txt", "w") as f:
+              f.write("custom\n")
+              f.write("era\n")
+              f.write("example\n")
+              f.write("renamer\n")
+          EOF
+      - name: Configure CMake
+        shell: bash
+        run: |
+          cmake -S . -B build  -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DENABLE_TRACY=${{ matrix.tracy }}
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build build -j4
+      - name: Archive executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ format('windows{0}executables', matrix.modules && '_modules_' || '_') }}
+          path: |
+            xi_connect.exe
+            ${{ format('xi_map{0}.exe', matrix.tracy == 'on' && '_tracy' || '') }}
+            xi_search.exe
+            xi_world.exe
+
+  Full_Startup_Checks_Windows:
+    runs-on: windows-2025
+    needs: Build_Windows
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - modules: false
+            tracy: off
+          - modules: true
+            tracy: on
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive # For navmeshes
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ format('windows{0}executables', matrix.modules && '_modules_' || '_') }}
+          path: .
+      - uses: zach2good/setup-mariadb@v1
+        with:
+          database: xidb
+      - name: Rename Tracy executable
+        if: ${{ matrix.tracy == 'on' }}
+        run: |
+          mv xi_map_tracy.exe xi_map.exe
+      - name: Enable modules
+        if: ${{ matrix.modules }}
+        shell: bash
+        run: |
+          python3 << EOF
+          with open("modules/init.txt", "w") as f:
+              f.write("custom\n")
+              f.write("era\n")
+              f.write("example\n")
+              f.write("renamer\n")
+          EOF
+      - name: Restore Python cache
+        uses: actions/cache/restore@v4
+        env:
+          hash: ${{ hashFiles('./tools/requirements.txt') }}
+        with:
+          path: ~/.local
+          key: packagecache-windows-${{ env.hash }}-${{ github.base_ref }}
+          restore-keys: |
+            packagecache-windows-${{ env.hash }}-
+            packagecache-windows-
+      - name: Install Python Dependencies
+        shell: bash
+        run: |
+          python3 -m pip install --break-system-packages --user --requirement ./tools/requirements.txt
+      - name: Import SQL files
+        shell: bash
+        run: |
+          python3 ./tools/dbtool.py setup
+      - name: Startup checks
+        shell: bash
+        run: |
+          python3 ./tools/ci/startup_checks.py
+
+  # https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
+  Build_MacOS:
+    needs: Sanity_Checks
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install Dependencies (Brew)
+        run: |
+          brew install mariadb zeromq zmq luajit
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cmake -S . -B build
+      - name: Build
+        run: |
+          cmake --build build -j4

@@ -1,0 +1,228 @@
+name: publish_latest
+
+on:
+  push:
+    branches:
+      - base
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  Linux:
+    runs-on: ubuntu-latest
+    env:
+      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
+      BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu
+            compiler: clang18
+            build_type: Release
+          - os: ubuntu
+            compiler: gcc14
+            build_type: Debug
+          - os: alpine
+            compiler: clang20
+            build_type: Release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Get Git commit timestamp
+        id: git-commit
+        run: echo "commit_timestamp=$(git log -1 --pretty=%ct)" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha
+          labels: |
+            org.opencontainers.image.authors=LandSandBoat Dev Teams
+            org.opencontainers.image.title=LandSandBoat Server (${{ matrix.os }})
+            org.opencontainers.image.documentation=https://github.com/LandSandBoat/server/wiki
+          flavor: ${{ matrix.os != 'ubuntu' && format('suffix=-{0},onlatest=true', matrix.os) || '' }}
+
+      - name: Cache packages
+        uses: actions/cache@v4
+        env:
+          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
+        with:
+          path: |
+            ${{ format('cache-{0}', env.package_manager) }}
+            ${{ format('lib-{0}', env.package_manager) }}
+            ${{ format('cache-pip-{0}', matrix.os) }}
+          key: ${{ format('cache-{0}-{1}-{2}', matrix.os, env.hash, github.ref_name) }}
+          restore-keys: |
+            ${{ format('cache-{0}-{1}-', matrix.os, env.hash) }}
+            ${{ format('cache-{0}-', matrix.os) }}
+
+      - name: Cache build
+        uses: actions/cache@v4
+        env:
+          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        with:
+          path: |
+            ${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}
+            ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}
+          key: ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}', matrix.os, env.hash, matrix.compiler, matrix.build_type, github.ref_name) }}
+          restore-keys: |
+            ${{ format('buildcache-{0}-{1}-{2}-{3}-', matrix.os, env.hash, matrix.compiler, matrix.build_type) }}
+            ${{ format('buildcache-{0}-{1}-{2}-', matrix.os, env.hash, matrix.compiler) }}
+
+      # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
+      - name: Inject cache
+        uses: reproducible-containers/buildkit-cache-dance@v3.2.0
+        with:
+          cache-map: |
+            {
+              ${{ format('"cache-{0}":"/var/cache/{1}",', env.package_manager, env.package_manager) }}
+              ${{ format('"lib-{0}":"/var/lib/{1}",', env.package_manager, env.package_manager) }}
+              ${{ format('"cache-pip-{0}":"/root/.cache/pip",', matrix.os) }}
+              ${{ format('"build-{0}-{1}":"/root/build",', matrix.os, matrix.compiler) }}
+              ${{ format('"ccache-{0}-{1}":"/root/.ccache"', matrix.os, matrix.compiler) }}
+            }
+          skip-extraction: false
+
+      - name: Build latest image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
+          push: ${{ matrix.build_type == 'Release' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          platforms: linux/amd64
+          cache-from: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:server-{1}-{2}-{3}-{4}', github.repository_owner, matrix.os, matrix.compiler, matrix.build_type, github.ref_name) }}
+          cache-to: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:server-{1}-{2}-{3}-{4},mode=max', github.repository_owner, matrix.os, matrix.compiler, matrix.build_type, github.ref_name) }}
+          build-args: |
+            COMPILER=${{ matrix.compiler }}
+            CMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            REPO_URL=${{ github.server_url }}/${{ github.repository }}.git
+            BRANCH=${{ github.ref_name }}
+
+      - name: Build devtools image
+        uses: docker/build-push-action@v6
+        if: ${{ matrix.build_type == 'Release' }}
+        with:
+          context: .
+          file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
+          target: devtools
+          push: ${{ matrix.build_type == 'Release' }}
+          tags: ${{ format('ghcr.io/{0}/devtools:{1}', github.repository_owner, matrix.os) }}
+          cache-from: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:devtools-{1}', github.repository_owner, matrix.os) }}
+          cache-to: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:devtools-{1},mode=max', github.repository_owner, matrix.os) }}
+
+  Windows:
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+    steps:
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+
+      - uses: actions/setup-python@v5
+        id: setup_python
+        with:
+          python-version: "3.12"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache Python
+        id: python-cache
+        uses: actions/cache@v4
+        env:
+          hash: ${{ hashFiles('./tools/requirements.txt') }}
+        with:
+          path: .venv
+          key: ${{ format('cache-windows-{0}-{1}', env.hash, github.ref_name) }}
+          restore-keys: |
+            ${{ format('cache-windows-{0}-', env.hash) }}
+            cache-windows-
+
+      - name: Cache build
+        uses: actions/cache@v4
+        env:
+          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        with:
+          path: build
+          key: ${{ format('buildcache-windows-{0}-{1}-{2}', env.hash, matrix.build_type, github.ref_name) }}
+          restore-keys: |
+            ${{ format('buildcache-windows-{0}-{1}-', env.hash, matrix.build_type) }}
+            ${{ format('buildcache-windows-{0}-', env.hash) }}
+
+      - name: Install Python dependencies
+        if: ${{ !steps.python-cache.outputs.cache-hit }}
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/Scripts/activate
+          python -m pip install -r ./tools/requirements.txt
+          echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+
+      - name: Activate Python virtual environment
+        shell: bash
+        run: |
+          echo ".venv/Scripts" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
+
+      - name: Verify venv
+        shell: bash
+        run: |
+          which python
+          python --version
+          pip --version
+          pip list
+
+      - name: Configure CMake
+        shell: bash
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DENABLE_TRACY=ON
+
+      - name: Build
+        shell: bash
+        run: cmake --build build -j$(nproc)
+
+      - name: Archive executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ format('windows_executables_{0}', matrix.build_type) }}
+          path: |
+            xi_connect.exe
+            xi_map_tracy.exe
+            xi_search.exe
+            xi_world.exe
+            ${{ matrix.build_type == 'Debug' && 'xi_connect.pdb' || '' }}
+            ${{ matrix.build_type == 'Debug' && 'xi_map_tracy.pdb' || '' }}
+            ${{ matrix.build_type == 'Debug' && 'xi_search.pdb' || '' }}
+            ${{ matrix.build_type == 'Debug' && 'xi_world.pdb' || '' }}

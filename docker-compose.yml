@@ -1,0 +1,107 @@
+x-dbcreds: &dbcreds
+  # MARIADB_ROOT_PASSWORD required if setting up fresh database.
+  # Generate a random root password and print it to build log:
+  # MARIADB_RANDOM_ROOT_PASSWORD: true
+  MARIADB_DATABASE: xidb
+  MARIADB_USER: xiadmin
+  MARIADB_PASSWORD: 'password'
+
+x-common: &common
+  image: ghcr.io/cocosolos/server:latest
+  env_file: .env
+  environment:
+    # <<: *dbcreds
+    XI_NETWORK_HTTP_HOST: 0.0.0.0
+    XI_NETWORK_ZMQ_IP: world
+    XI_NETWORK_SQL_HOST: database
+    # XI_{file}_{setting}: value
+  volumes:
+    - ./tools/config.yaml:/server/tools/config.yaml # Enables dbtool express updates. Create this (empty) file on the host before running.
+    - losmeshes:/server/losmeshes # Initialize before running:
+    - navmeshes:/server/navmeshes # docker run --rm -v losmeshes:/losmeshes -v navmeshes:/navmeshes ghcr.io/cocosolos/ximeshes:latest
+
+services:
+  database:
+    image: mariadb
+    restart: always
+    env_file: .env
+    # environment:
+    #   <<: *dbcreds
+    volumes:
+      - database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  database-update:
+    <<: *common
+    command: ["python3", "/server/tools/dbtool.py", "update"]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  connect:
+    <<: *common
+    command: ["/server/xi_connect"]
+    restart: unless-stopped
+    ports:
+      - "54001:54001"
+      - "54230:54230"
+      - "54231:54231"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+
+  search:
+    <<: *common
+    command: ["/server/xi_search"]
+    restart: unless-stopped
+    ports:
+      - "54002:54002"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+
+  world:
+    <<: *common
+    command: ["/server/xi_world"]
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+
+  map:
+    <<: *common
+    command: ["/server/xi_map"]
+    restart: unless-stopped
+    ports:
+      - "54230:54230/udp"
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      database-update:
+        condition: service_completed_successfully
+      world:
+        condition: service_started
+
+volumes:
+  database:
+  losmeshes:
+    external: true
+  navmeshes:
+    external: true

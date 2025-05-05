@@ -1,8 +1,6 @@
 #!/bin/bash
 
-sha=${1}
-
-python << EOF
+python3 << EOF
 import re
 import subprocess
 
@@ -18,7 +16,7 @@ disallowed_words = [
 def get_commit_hashes():
     commit_hashes = []
 
-    result = subprocess.run(['git', 'rev-list', '${sha}..'],
+    result = subprocess.run(['git', 'rev-list', 'HEAD^{/"Merge pull request"}..'],
         capture_output=True, text=True)
 
     for commit in result.stdout.splitlines():
