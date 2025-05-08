@@ -1,6 +1,6 @@
 FROM busybox:latest
 
-COPY ./losmeshes /losmeshes
-COPY ./navmeshes /navmeshes
+COPY ./losmeshes/*.obj /losmeshes/
+COPY ./navmeshes/*.nav /navmeshes/
 
 VOLUME /navmeshes /losmeshes
