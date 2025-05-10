@@ -12,20 +12,20 @@ concurrency:
 
 jobs:
   Build_Packages:
+    runs-on: ubuntu-latest
+    env:
+      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu
-            package_manager: apt
             compiler: gcc
             build_type: Release
           - os: alpine
-            package_manager: apk
             compiler: gcc
             build_type: Release
 
-    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,9 +67,9 @@ jobs:
           hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
         with:
           path: |
-            ${{ format('var-cache-{0}', matrix.package_manager) }}
+            ${{ format('var-cache-{0}', env.package_manager) }}
+            ${{ format('var-lib-{0}', env.package_manager) }}
             ${{ format('cache-pip-{0}', matrix.os) }}
-            ${{ matrix.os == 'ubuntu' && 'var-lib-apt' || '' }}
           key: packagecache-${{ matrix.os }}-${{ env.hash }}-${{ github.ref_name }}
           restore-keys: |
             packagecache-${{ matrix.os }}-${{ env.hash }}-
@@ -83,15 +83,48 @@ jobs:
           path: |
             ${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}
             ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}
-          key: buildcache-${{ matrix.os }}-${{ matrix.compiler }}-${{ env.hash }}-${{ github.ref_name }}
+          key: buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-${{ github.ref_name }}
           restore-keys: |
-            buildcache-${{ matrix.os }}-${{ matrix.compiler }}-${{ env.hash }}-
+            buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-
 
       # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
       - name: Inject cache
         uses: reproducible-containers/buildkit-cache-dance@v3.2.0
         with:
-          dockerfile: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
+          cache-map: |
+            {
+              "${{ format('var-cache-{0}', env.package_manager) }}":
+                {
+                  "target": "${{ format('/var/cache/{0}', env.package_manager) }}",
+                  "id": "${{ format('var-cache-{0}', env.package_manager) }}"
+                },
+              "${{ format('var-lib-{0}', env.package_manager) }}":
+                {
+                  "target": "${{ format('/var/lib/{0}', env.package_manager) }}",
+                  "id": "${{ format('var-lib-{0}', env.package_manager) }}"
+                },
+              "${{ format('cache-pip-{0}', matrix.os) }}":
+                {
+                  "target": "/xiadmin/.cache/pip",
+                  "id": "${{ format('cache-pip-{0}', matrix.os) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                },
+              "${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}":
+                {
+                  "target": "/xiadmin/build",
+                  "id": "${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                },
+              "${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}":
+                {
+                  "target": "/xiadmin/.ccache",
+                  "id": "${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                }
+            }
           skip-extraction: false
 
       - name: Build and push

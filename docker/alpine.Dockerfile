@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/var/cache/apk,id=var-cache-apk,sharing=locked \
     apk --update-cache add \
     binutils-dev \
     ccache \
-    clang18 \
+    # clang18 \
     cmake \
     g++ \
     linux-headers \
@@ -75,6 +75,7 @@ COPY --chown=$UNAME:$UGROUP --exclude=.git --exclude=losmeshes/** --exclude=navm
 #########
 FROM staging AS build
 
+# clang requires fortify-headers which breaks the build
 ARG COMPILER=gcc
 ARG CMAKE_BUILD_TYPE=Release
 

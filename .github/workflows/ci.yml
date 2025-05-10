@@ -223,21 +223,21 @@ jobs:
   #             exit 1
   #         fi
 
-  Ubuntu_Build:
+  Docker_Build:
     # needs: Sanity_Checks
     runs-on: ubuntu-latest
     env:
-      os: ubuntu
-      package_manager: apt
+      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - compiler: gcc
+          - os: ubuntu
+            compiler: gcc
             build_type: Release
-          - compiler: clang
+          - os: ubuntu
+            compiler: clang
             build_type: RelWithDebInfo
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -266,23 +266,23 @@ jobs:
             type=sha
           labels: |
             org.opencontainers.image.authors=LandSandBoat Dev Teams
-            org.opencontainers.image.title=LandSandBoat Server (${{ env.os }})
+            org.opencontainers.image.title=LandSandBoat Server (${{ matrix.os }})
             org.opencontainers.image.documentation=https://github.com/LandSandBoat/server/wiki
           flavor: ${{ format('suffix=-{0}', matrix.compiler) }}
 
       - name: Restore packages cache
         uses: actions/cache/restore@v4
         env:
-          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', env.os), './tools/requirements.txt') }}
+          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
         with:
           path: |
             ${{ format('var-cache-{0}', env.package_manager) }}
-            ${{ format('cache-pip-{0}', env.os) }}
-            ${{ env.os == 'ubuntu' && 'var-lib-apt' || '' }}
-          key: packagecache-${{ env.os }}-${{ env.hash }}-${{ github.base_ref }}
+            ${{ format('cache-pip-{0}', matrix.os) }}
+            ${{ matrix.os == 'ubuntu' && 'var-lib-apt' || '' }}
+          key: packagecache-${{ matrix.os }}-${{ env.hash }}-${{ github.base_ref }}
           restore-keys: |
-            packagecache-${{ env.os }}-${{ env.hash }}-
-            packagecache-${{ env.os }}-
+            packagecache-${{ matrix.os }}-${{ env.hash }}-
+            packagecache-${{ matrix.os }}-
 
       - name: Restore build cache
         uses: actions/cache/restore@v4
@@ -290,17 +290,50 @@ jobs:
           hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
         with:
           path: |
-            ${{ format('build-{0}-{1}', env.os, matrix.compiler ) }}
-            ${{ format('ccache-{0}-{1}', env.os, matrix.compiler ) }}
-          key: buildcache-${{ env.os }}-${{ matrix.compiler }}-${{ env.hash }}-${{ github.base_ref }}
+            ${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}
+            ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}
+          key: buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-${{ github.base_ref }}
           restore-keys: |
-            buildcache-${{ env.os }}-${{ matrix.compiler }}-${{ env.hash }}-
+            buildcache-${{ matrix.os }}-${{ env.hash }}-${{ matrix.compiler }}-
 
       # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
       - name: Inject cache
         uses: reproducible-containers/buildkit-cache-dance@v3.2.0
         with:
-          dockerfile: ${{ format('./docker/{0}.Dockerfile', env.os) }}
+          cache-map: |
+            {
+              "${{ format('var-cache-{0}', env.package_manager) }}":
+                {
+                  "target": "${{ format('/var/cache/{0}', env.package_manager) }}",
+                  "id": "${{ format('var-cache-{0}', env.package_manager) }}"
+                },
+              "${{ format('var-lib-{0}', env.package_manager) }}":
+                {
+                  "target": "${{ format('/var/lib/{0}', env.package_manager) }}",
+                  "id": "${{ format('var-lib-{0}', env.package_manager) }}"
+                },
+              "${{ format('cache-pip-{0}', matrix.os) }}":
+                {
+                  "target": "/xiadmin/.cache/pip",
+                  "id": "${{ format('cache-pip-{0}', matrix.os) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                },
+              "${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}":
+                {
+                  "target": "/xiadmin/build",
+                  "id": "${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                },
+              "${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}":
+                {
+                  "target": "/xiadmin/.ccache",
+                  "id": "${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}",
+                  "uid": 1000,
+                  "gid": 1000
+                }
+            }
           skip-extraction: true
 
       - name: Build and push
@@ -309,13 +342,13 @@ jobs:
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
         with:
           context: .
-          file: ${{ format('./docker/{0}.Dockerfile', env.os) }}
+          file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           platforms: linux/amd64
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/buildcache:server-${{ github.base_ref }}-${{ env.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/buildcache:server-${{ github.base_ref }}-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
           build-args: |
             COMPILER=${{ matrix.compiler }}
             CMAKE_BUILD_TYPE=${{ matrix.build_type }}
