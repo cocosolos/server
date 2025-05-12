@@ -1,5 +1,7 @@
 #!/bin/bash
 
+sha=${1}
+
 python3 << EOF
 import re
 import subprocess
@@ -16,7 +18,7 @@ disallowed_words = [
 def get_commit_hashes():
     commit_hashes = []
 
-    result = subprocess.run(['git', 'rev-list', 'HEAD^{/"Merge pull request"}..'],
+    result = subprocess.run(['git', 'rev-list', '${sha}..'],
         capture_output=True, text=True)
 
     for commit in result.stdout.splitlines():
@@ -47,10 +49,10 @@ def get_commit_messages():
 def print_error(hash, lines, line, message):
     lines_text = '\n'.join(lines)
 
-    print(f"### Found formatting issue in commit ###\n{hash}\n")
-    print(f"### Issue ###\n{message}\n")
-    print(f"### Line with issue ###\n{line}\n")
-    print(f"### Commit message ###\n{lines_text}\n")
+    print(f"#### Found formatting issue in commit {hash}\n")
+    print(f"> ###### Issue \n> {message}\n")
+    print(f"> ###### Line with issue \n> {line}\n")
+    print(f"> ###### Commit message \n> {lines_text}\n\n")
 
 # Main Logic
 # https://robertcooper.me/post/git-commit-messages

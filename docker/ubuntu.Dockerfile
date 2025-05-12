@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install --assume-yes --no-install-recommends --qui
     mariadb-client \
     openssl \
     python3 \
+    screen \
     tini \
     tzdata \
     zlib1g
@@ -117,7 +118,7 @@ EOF
 COPY --exclude=.git --exclude=losmeshes/** --exclude=navmeshes/** --exclude=scripts --exclude=sql . /server
 
 ARG CMAKE_BUILD_TYPE=Release
-ARG ENABLE_TRACY=ON
+ARG ENABLE_TRACY=OFF
 ARG WARNINGS_AS_ERRORS=TRUE
 
 ENV CCACHE_DIR=/root/.ccache

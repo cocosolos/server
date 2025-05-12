@@ -120,6 +120,7 @@ jobs:
           build-args: |
             COMPILER=${{ matrix.compiler }}
             CMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            ENABLE_TRACY=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
             REPO_URL=${{ github.server_url }}/${{ github.repository }}.git
             BRANCH=${{ github.ref_name }}
 
@@ -137,6 +138,9 @@ jobs:
 
   Windows:
     runs-on: windows-2025
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -180,7 +184,6 @@ jobs:
 
       - name: Install Python dependencies
         if: ${{ !steps.python-cache.outputs.cache-hit }}
-        shell: bash
         run: |
           python -m venv .venv
           source .venv/Scripts/activate
@@ -189,13 +192,11 @@ jobs:
           echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
 
       - name: Activate Python virtual environment
-        shell: bash
         run: |
           echo ".venv/Scripts" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
 
-      - name: Verify venv
-        shell: bash
+      - name: Verify Python virtual environment
         run: |
           which python
           python --version
@@ -203,26 +204,24 @@ jobs:
           pip list
 
       - name: Configure CMake
-        shell: bash
-        run: >
-          cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DENABLE_TRACY=ON
+        run: |
+          cp -p build/xi_* . 2> /dev/null || true
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DENABLE_TRACY=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
 
       - name: Build
-        shell: bash
-        run: cmake --build build -j$(nproc)
+        run: |
+          cmake --build build -j$(nproc)
+          cp -p xi_* build/
 
       - name: Archive executables
         uses: actions/upload-artifact@v4
+        if: ${{ matrix.build_type == 'Release' }}
         with:
-          name: ${{ format('windows_executables_{0}', matrix.build_type) }}
+          name: windows_executables_Release
           path: |
             xi_connect.exe
-            xi_map_tracy.exe
+            xi_map.exe
             xi_search.exe
             xi_world.exe
-            ${{ matrix.build_type == 'Debug' && 'xi_connect.pdb' || '' }}
-            ${{ matrix.build_type == 'Debug' && 'xi_map_tracy.pdb' || '' }}
-            ${{ matrix.build_type == 'Debug' && 'xi_search.pdb' || '' }}
-            ${{ matrix.build_type == 'Debug' && 'xi_world.pdb' || '' }}

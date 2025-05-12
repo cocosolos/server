@@ -15,6 +15,7 @@ RUN apk --update-cache add \
     mariadb-connector-c \
     openssl \
     python3 \
+    screen \
     tini \
     tzdata \
     zeromq \
@@ -113,7 +114,7 @@ EOF
 COPY --exclude=.git --exclude=losmeshes/** --exclude=navmeshes/** --exclude=scripts --exclude=sql . /server
 
 ARG CMAKE_BUILD_TYPE=Release
-ARG ENABLE_TRACY=ON
+ARG ENABLE_TRACY=OFF
 ARG WARNINGS_AS_ERRORS=FALSE
 
 ENV CCACHE_DIR=/root/.ccache

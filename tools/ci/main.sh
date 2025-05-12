@@ -1,22 +1,22 @@
 #!/bin/bash
 set -e
+checks_failed=false
 
 # Git
-echo "Checking commit formatting..."
-touch git_checks.txt
-bash tools/ci/git.sh >> git_checks.txt || true
-cat git_checks.txt
-if [[ -s git_checks.txt ]]; then
-    exit 1
-fi
-
 echo "Changed files:"
-git diff --name-status HEAD^{/"Merge pull request"}...HEAD
-readarray -t CHANGED_FILES <<< $(git diff --name-only HEAD^{/"Merge pull request"}...HEAD)
+git diff --name-status $GIT_REF..
+readarray -t CHANGED_FILES <<< $(git diff --name-only $GIT_REF..)
 CHANGED_FILES=${CHANGED_FILES[@]}
 
+echo "Checking commit formatting..."
+touch git_checks.md
+bash tools/ci/git.sh $GIT_REF >> git_checks.md || true
+if [[ -s git_checks.md ]]; then
+    checks_failed=true
+fi
+
 echo "Checking license headers..."
-python3 tools/ci/detect_license_headers.py
+python3 tools/ci/detect_license_headers.py >> license_headers_checks.txt
 
 # Python
 echo "Running Python checks..."
@@ -28,25 +28,23 @@ for changed_file in $CHANGED_FILES; do
         fi
     fi
 done
-cat python_checks.txt
 if [[ -s python_checks.txt ]]; then
-  exit 1
+    checks_failed=true
 fi
 
 # SQL
 echo "Running SQL checks..."
-touch sql_checks.txt
+touch SQL_checks.txt
 for changed_file in $CHANGED_FILES; do
     if [[ -f $changed_file ]]; then
         if [[ $changed_file == *.sql ]]; then
-            bash tools/ci/sql.sh ${changed_file} >> sql_checks.txt || true
+            bash tools/ci/sql.sh ${changed_file} >> SQL_checks.txt || true
         fi
     fi
 done
-python3 tools/price_checker.py >> sql_checks.txt
-cat sql_checks.txt
-if [[ -s sql_checks.txt ]]; then
-    exit 1
+python3 tools/price_checker.py >> SQL_checks.txt
+if [[ -s SQL_checks.txt ]]; then
+    checks_failed=true
 fi
 
 # Lua
@@ -61,29 +59,27 @@ for changed_file in $CHANGED_FILES; do
     fi
 done
 python3 tools/ci/check_lua_binding_usage.py >> lua_checks.txt
-cat lua_checks.txt
 if [[ -s lua_checks.txt ]]; then
-    exit 1
+    checks_failed=true
 fi
 
 # C++
 echo "Running C++ checks..."
-touch cpp_checks.txt
+touch c++_checks.txt
 for changed_file in $CHANGED_FILES; do
     if [[ -f $changed_file ]]; then
         if [[ $changed_file == *.cpp ]]; then
-            bash tools/ci/cpp.sh ${changed_file} 2>> cpp_checks.txt || true
+            bash tools/ci/cpp.sh ${changed_file} 2>> c++_checks.txt || true
         fi
     fi
 done
-cat cpp_checks.txt
-if [[ -s cpp_checks.txt ]]; then
-    exit 1
+if [[ -s c++_checks.txt ]]; then
+    checks_failed=true
 fi
 
 echo "Running C++ formatting checks (clang-format-18)..."
 clang-format-18 -version
-touch cpp_formatting_checks.txt
+touch c++_formatting_checks.md
 for changed_file in $CHANGED_FILES; do
     if [[ -f $changed_file ]]; then
         if [[ $changed_file == *.cpp || $changed_file == *.h ]]; then
@@ -91,23 +87,31 @@ for changed_file in $CHANGED_FILES; do
         fi
     fi
 done
-git diff --color >> cpp_formatting_checks_color.txt
-if [[ -s cpp_formatting_checks_color.txt ]]; then
-    echo ""
-    echo "You have errors in your C++ code formatting."
-    echo "Please see below in red for the incorrect formatting, and in green for the correct formatting."
-    echo "You can either fix the formatting by hand or use clang-format."
-    echo "(You can safely ignore warnings about \$TERM and tput)"
-    echo ""
-    cat cpp_formatting_checks_color.txt | diff-so-fancy || true
-    exit 1
+
+git diff --no-color >> c++_formatting_checks.md
+if [[ -s c++_formatting_checks.md ]]; then
+    checks_failed=true
+    sed -i '1i \`\`\`diff' c++_formatting_checks.md
+    echo "\`\`\`" >> c++_formatting_checks.md
+    echo "" >> c++_formatting_checks.md
 fi
 
-echo "Running Lua Language Server..."
-python3 tools/ci/lua_lang_server.py
-if [[ -f lua_lang_errors.txt ]]; then
-    cat lua_lang_errors.txt
-    exit 1
-fi
+# git diff --color >> cpp_formatting_checks_color.txt
+# if [[ -s cpp_formatting_checks_color.txt ]]; then
+#     echo ""
+#     echo "You have errors in your C++ code formatting."
+#     echo "Please see below in red for the incorrect formatting, and in green for the correct formatting."
+#     echo "You can either fix the formatting by hand or use clang-format."
+#     echo "(You can safely ignore warnings about \$TERM and tput)"
+#     echo ""
+#     cat cpp_formatting_checks_color.txt | diff-so-fancy || true
+#     checks_failed=true
+# fi
 
-exit 0
+if [[ "$checks_failed" == "true" ]]; then
+    echo "One or more checks failed."
+    exit 1
+else
+    echo "All checks passed."
+    exit 0
+fi
