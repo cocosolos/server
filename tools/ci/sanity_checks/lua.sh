@@ -112,10 +112,11 @@ ignore_rules=(
 
 ~/.luarocks/bin/luacheck ${target} \
 --quiet --jobs 4 --no-config --codes \
+--no-color \
 --no-unused-args \
 --no-max-line-length \
 --max-cyclomatic-complexity 30 \
 --globals ${global_funcs[@]} ${global_objects[@]} \
---ignore ${ignores[@]} ${ignore_rules[@]} | grep -v "Total:"
+--ignore ${ignores[@]} ${ignore_rules[@]} | grep -v "Total:" >> lua_checks.txt
 
-python3 ./tools/ci/lua_stylecheck.py ${target}
+python3 ./tools/ci/sanity_checks/lua_stylecheck.py ${target} >> lua_style_checks.md

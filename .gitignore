@@ -173,7 +173,6 @@ log/leaks.txt
 .luarc.json
 lua-language-server*
 check.json
-lua_lang_errors.txt
 
 # VSCode
 .vscode
@@ -252,3 +251,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+__pycache__
+
+*_checks.md
+*_checks.txt

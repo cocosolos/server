@@ -72,7 +72,7 @@ RUN --mount=type=cache,target=/var/cache/apt,id=cache-apt,sharing=locked \
 RUN --mount=type=bind,source=tools/requirements.txt,target=/tmp/requirements.txt \
     --mount=type=cache,target=/root/.cache/pip,id=cache-pip-ubuntu \
     python3 -m venv $VIRTUAL_ENV && \
-    pip3 install --requirement /tmp/requirements.txt
+    python -m pip install --requirement /tmp/requirements.txt
 
 ############
 # devtools #
@@ -149,6 +149,7 @@ cp -p /server/src/common/version.cpp /root/build/
 
 if [ "$ENABLE_TRACY" = "ON" ]; then
     mv xi_map_tracy xi_map
+    echo 'export TRACY_NO_INVARIANT_CHECK=1' >> /etc/profile.d/env.sh
 fi
 EOF
 

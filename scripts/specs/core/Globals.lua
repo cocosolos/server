@@ -265,12 +265,6 @@ function VanadielRSELocation()
 end
 
 ---@nodiscard
----@param offset integer
----@return boolean
-function SetVanadielTimeOffset(offset)
-end
-
----@nodiscard
 ---@return boolean
 function IsMoonNew()
 end
