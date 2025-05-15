@@ -11,46 +11,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Build:
+  Cache_Build:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows, ubuntu, macos, alpine]
-        build_type: [Release, Debug]
         include:
-          - os: windows
+          - os: Windows
             compiler: msvc19
+            build_type: Release
+            tracy: ''
             runner: windows-2025
-          - os: ubuntu
+          - os: Windows
+            compiler: msvc19
+            build_type: Debug
+            tracy: 'Tracy'
+            runner: windows-2025
+          - os: Ubuntu
             compiler: gcc14
-            runner: ubuntu-latest
-          - os: macos
-            compiler: appleclang16
+            build_type: Debug
+            tracy: 'Tracy'
+            runner: ubuntu-24.04
+          - os: macOS
+            compiler: appleClang16
+            build_type: Debug
+            tracy: 'Tracy'
             runner: macos-15
-          - os: alpine
-            compiler: clang20
-            runner: ubuntu-latest
-        exclude:
-          - os: macos
-            build_type: Debug
-          - os: alpine
-            build_type: Debug
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
         shell: bash
     env:
-      BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
-      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
+      package_manager: apt
       build_dir: ${{ format('build-{0}-{1}', matrix.os, matrix.compiler) }}
       ccache_dir: ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler) }}
     steps:
-      - uses: docker/login-action@v3
-        if: ${{ runner.os == 'Linux' }}
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@v4
         with:
@@ -61,52 +55,55 @@ jobs:
         with:
           msbuild-architecture: x64
 
-      - uses: docker/setup-buildx-action@v3
-        if: ${{ runner.os == 'Linux' }}
-
       - uses: actions/setup-python@v5
-        if: ${{ runner.os == 'Windows' }}
         with:
-          python-version: "3.12"
+          python-version: '3.12'
+
+      - name: Install Dependencies (Brew)
+        if: ${{ runner.os == 'macOS' }}
+        run: brew install mariadb zeromq zmq luajit
+
+      - name: Install Dependencies (APT)
+        if: ${{ matrix.os == 'Ubuntu' }}
+        run: |
+          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
+            binutils-dev \
+            build-essential \
+            ca-certificates \
+            ccache \
+            cmake \
+            git \
+            g++-14 \
+            libluajit-5.1-dev \
+            libmariadb-dev-compat \
+            libssl-dev \
+            libzmq3-dev \
+            make \
+            mariadb-client \
+            ninja-build \
+            python3-dev \
+            python3-venv \
+            tzdata \
+            zlib1g-dev
 
       - name: Cache Python
         id: python-cache
         uses: actions/cache@v4
-        if: ${{ runner.os == 'Windows' }}
         env:
           hash: ${{ hashFiles('./tools/requirements.txt') }}
         with:
           path: .venv
-          key: ${{ format('cache-windows-{0}-{1}', env.hash, github.ref_name) }}
-          restore-keys: |
-            ${{ format('cache-windows-{0}-', env.hash) }}
-            cache-windows-
-
-      - name: Install Python dependencies
-        if: ${{ runner.os == 'Windows' && !steps.python-cache.outputs.cache-hit }}
-        run: |
-          python3 -m venv .venv
-          source .venv/Scripts/activate
-          python -m pip install -r ./tools/requirements.txt
-
-      - name: Cache packages
-        uses: actions/cache@v4
-        if: ${{ runner.os == 'Linux' }}
-        env:
-          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
-        with:
-          path: |
-            ${{ format('cache-{0}', env.package_manager) }}
-            ${{ format('lib-{0}', env.package_manager) }}
-            ${{ format('cache-pip-{0}', matrix.os) }}
           key: ${{ format('cache-{0}-{1}-{2}', matrix.os, env.hash, github.ref_name) }}
           restore-keys: |
             ${{ format('cache-{0}-{1}-', matrix.os, env.hash) }}
             ${{ format('cache-{0}-', matrix.os) }}
 
-      - name: Install Dependencies (Brew)
-        if: ${{ runner.os == 'macOS' }}
-        run: brew install mariadb zeromq zmq luajit
+      - name: Install Python dependencies
+        if: ${{ !steps.python-cache.outputs.cache-hit }}
+        run: |
+          python3 -m venv .venv
+          source ${{ runner.os == 'Windows' && '.venv/Scripts/activate' || '.venv/bin/activate' }}
+          python -m pip install -r ./tools/requirements.txt
 
       - name: Cache build
         uses: actions/cache@v4
@@ -121,10 +118,97 @@ jobs:
             ${{ format('buildcache-{0}-{1}-{2}-{3}-', matrix.os, env.hash, matrix.compiler, matrix.build_type) }}
             ${{ format('buildcache-{0}-{1}-{2}-', matrix.os, env.hash, matrix.compiler) }}
 
+      - name: Configure CMake
+        run: |
+          echo "CCACHE_DIR=${{ env.ccache_dir }}" >> $GITHUB_ENV
+          if [[ ${{ matrix.os }} == 'Ubuntu' ]]; then
+              echo "CC=/usr/bin/gcc-14" >> $GITHUB_ENV
+              echo "CXX=/usr/bin/g++-14" >> $GITHUB_ENV
+          fi
+          cp -p ${{ env.build_dir }}/xi_* . 2> /dev/null || true
+          rm ${{ env.build_dir }}/CMakeCache.txt || true
+          cmake -S . -B ${{ env.build_dir }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DENABLE_TRACY=${{ matrix.tracy == 'Tracy' && 'ON' || 'OFF' }}
+
+      - name: Build
+        run: |
+          cmake --build ${{ env.build_dir }} -j$(${{ runner.os == 'macOS' && 'sysctl -n hw.logicalcpu' || 'nproc' }})
+          cp -p xi_* ${{ env.build_dir }}/
+
+      - name: Archive executables
+        uses: actions/upload-artifact@v4
+        if: ${{ runner.os == 'Windows' && matrix.build_type == 'Release' }}
+        with:
+          name: windows_executables_Release_${{ github.sha }}
+          path: |
+            xi_connect.exe
+            xi_map.exe
+            xi_search.exe
+            xi_world.exe
+
+  Docker_Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu
+            compiler: gcc14
+            build_type: Release
+            tracy: ''
+          - os: alpine
+            compiler: clang20
+            build_type: Release
+            tracy: ''
+    runs-on: ubuntu-latest
+    env:
+      BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
+      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
+      build_dir: ${{ format('build-{0}-{1}', matrix.os, matrix.compiler) }}
+      ccache_dir: ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler) }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Cache packages
+        uses: actions/cache@v4
+        env:
+          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
+        with:
+          path: |
+            ${{ format('cache-{0}', env.package_manager) }}
+            ${{ format('lib-{0}', env.package_manager) }}
+            ${{ format('cache-pip-{0}', matrix.os) }}
+          key: ${{ format('cache-docker-{0}-{1}-{2}', matrix.os, env.hash, github.ref_name) }}
+          restore-keys: |
+            ${{ format('cache-docker-{0}-{1}-', matrix.os, env.hash) }}
+            ${{ format('cache-docker-{0}-', matrix.os) }}
+
+      - name: Cache build
+        uses: actions/cache@v4
+        env:
+          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        with:
+          path: |
+            ${{ env.build_dir }}
+            ${{ env.ccache_dir }}
+          key: ${{ format('buildcache-docker-{0}-{1}-{2}-{3}-{4}', matrix.os, env.hash, matrix.compiler, matrix.build_type, github.ref_name) }}
+          restore-keys: |
+            ${{ format('buildcache-docker-{0}-{1}-{2}-{3}-', matrix.os, env.hash, matrix.compiler, matrix.build_type) }}
+            ${{ format('buildcache-docker-{0}-{1}-{2}-', matrix.os, env.hash, matrix.compiler) }}
+
       - name: Docker meta
         id: docker-meta
         uses: docker/metadata-action@v5
-        if: ${{ runner.os == 'Linux' }}
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -140,7 +224,6 @@ jobs:
       # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
       - name: Inject cache into container
         uses: reproducible-containers/buildkit-cache-dance@v3.2.0
-        if: ${{ runner.os == 'Linux' }}
         with:
           cache-map: |
             {
@@ -154,7 +237,6 @@ jobs:
 
       - name: Docker build and push
         uses: docker/build-push-action@v6
-        if: ${{ runner.os == 'Linux' }}
         env:
           cache_key: ${{ format('{0}-{1}-{2}-{3}', matrix.os, matrix.compiler, matrix.build_type, github.ref_name) }}
         with:
@@ -170,13 +252,13 @@ jobs:
           build-args: |
             COMPILER=${{ matrix.compiler }}
             CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-            ENABLE_TRACY=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
+            ENABLE_TRACY=${{ matrix.tracy == 'Tracy' && 'ON' || 'OFF' }}
             REPO_URL=${{ github.server_url }}/${{ github.repository }}.git
             BRANCH=${{ github.ref_name }}
 
       - name: Build devtools image
         uses: docker/build-push-action@v6
-        if: ${{ runner.os == 'Linux' && matrix.build_type == 'Release' }}
+        if: ${{ matrix.build_type == 'Release' }}
         with:
           context: .
           file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
@@ -185,30 +267,3 @@ jobs:
           tags: ${{ format('ghcr.io/{0}/devtools:{1}', github.repository_owner, matrix.os) }}
           cache-from: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:devtools-{1}', github.repository_owner, matrix.os) }}
           cache-to: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:devtools-{1},mode=max', github.repository_owner, matrix.os) }}
-
-      - name: Configure CMake
-        if: ${{ runner.os != 'Linux' }}
-        run: |
-          echo "CCACHE_DIR=${{ env.ccache_dir }}" >> $GITHUB_ENV
-          cp -p ${{ env.build_dir }}/xi_* . 2> /dev/null || true
-          rm ${{ env.build_dir }}/CMakeCache.txt || true
-          cmake -S . -B ${{ env.build_dir }} \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DENABLE_TRACY=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
-
-      - name: Build
-        if: ${{ runner.os != 'Linux' }}
-        run: |
-          cmake --build ${{ env.build_dir }} -j$(nproc)
-          cp -p xi_* ${{ env.build_dir }}/
-
-      - name: Archive executables
-        uses: actions/upload-artifact@v4
-        if: ${{ runner.os == 'Windows' && matrix.build_type == 'Release' }}
-        with:
-          name: windows_executables_Release_${{ github.sha }}
-          path: |
-            xi_connect.exe
-            xi_map.exe
-            xi_search.exe
-            xi_world.exe

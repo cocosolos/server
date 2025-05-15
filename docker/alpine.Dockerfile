@@ -15,7 +15,6 @@ RUN apk --update-cache add \
     mariadb-connector-c \
     openssl \
     python3 \
-    screen \
     tini \
     tzdata \
     zeromq \

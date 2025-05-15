@@ -21,7 +21,6 @@ RUN apt-get update && apt-get install --assume-yes --no-install-recommends --qui
     mariadb-client \
     openssl \
     python3 \
-    screen \
     tini \
     tzdata \
     zlib1g
