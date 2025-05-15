@@ -117,11 +117,11 @@ EOF
 COPY --exclude=.git --exclude=losmeshes/** --exclude=navmeshes/** --exclude=scripts --exclude=sql . /server
 
 ARG CMAKE_BUILD_TYPE=Release
-ARG ENABLE_TRACY=OFF
+ARG TRACY_ENABLE=OFF
 ARG WARNINGS_AS_ERRORS=TRUE
 
 ENV CCACHE_DIR=/root/.ccache
-RUN --mount=type=cache,target=/root/build,id=build-ubuntu-$COMPILER \
+RUN --mount=type=cache,target=/root/build,id=build-ubuntu-$COMPILER-$CMAKE_BUILD_TYPE \
     --mount=type=cache,target=/root/.ccache,id=ccache-ubuntu-$COMPILER \
     --mount=type=bind,source=.git,target=/server/.git \
     --mount=type=bind,source=scripts,target=/server/scripts \
@@ -140,13 +140,13 @@ else
     export CXX=/usr/bin/g++-14
 fi
 
-cmake -G Ninja -S /server -B /root/build -DENABLE_TRACY=$ENABLE_TRACY -DWARNINGS_AS_ERRORS=$WARNINGS_AS_ERRORS
+cmake -G Ninja -S /server -B /root/build -DTRACY_ENABLE=$TRACY_ENABLE -DWARNINGS_AS_ERRORS=$WARNINGS_AS_ERRORS
 cmake --build /root/build -j$(nproc)
 
 cp -p /server/xi_* /root/build/
 cp -p /server/src/common/version.cpp /root/build/
 
-if [ "$ENABLE_TRACY" = "ON" ]; then
+if [ "$TRACY_ENABLE" = "ON" ]; then
     mv xi_map_tracy xi_map
     echo 'export TRACY_NO_INVARIANT_CHECK=1' >> /etc/profile.d/env.sh
 fi
