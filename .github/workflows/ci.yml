@@ -1,12 +1,11 @@
 name: ci
 
 on:
-  workflow_dispatch:
-  # pull_request:
-  #   types:
-  #     - opened
-  #     - synchronize
-  #     - reopened
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -18,17 +17,24 @@ jobs:
   Sanity_Checks:
     name: Sanity Checks
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/devtools:ubuntu
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_REF: origin/${{ github.event.pull_request.base.ref }}
     steps:
+      # github.workspace is the workspace in the runner (/home/runner/work/server/server)
+      # $GITHUB_WORKSPACE is the workspace in the container (/__w/server/server)
+      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Run checks
         id: run_checks
-        run: >
-          docker run --mount type=bind,src=.,dst=/server
-          -e GIT_REF=origin/${{ github.event.pull_request.base.ref }}
-          --rm ghcr.io/${{ github.repository_owner }}/devtools:ubuntu
-          /bin/bash -c '/server/tools/ci/sanity_checks/main.sh'
+        run: ./tools/ci/sanity_checks/main.sh
 
       - name: Summarize checks
         id: summarize_checks
@@ -69,7 +75,7 @@ jobs:
           if [[ "$found_issues" == "false" ]]; then
               if [[ "${{ steps.run_checks.outcome }}" != "success" ]]; then
                   echo "### :x: Sanity check failed, but no specific output files were found/populated." >> $GITHUB_STEP_SUMMARY
-                  echo "Check the logs of the 'Run tests' step for details." >> $GITHUB_STEP_SUMMARY
+                  echo "Check the logs for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
               fi
           fi
@@ -84,16 +90,20 @@ jobs:
     name: Lua Language Server
     needs: Sanity_Checks
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/devtools:ubuntu
+    defaults:
+      run:
+        shell: bash
     steps:
+      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Run Lua Language Server
         id: run_lls
-        run: >
-          docker run --mount type=bind,src=.,dst=/server
-          --rm ghcr.io/${{ github.repository_owner }}/devtools:ubuntu
-          /bin/bash -c 'python ./tools/ci/lua_lang_server.py'
+        run: python ./tools/ci/lua_lang_server.py
 
       - name: Summarize run
         id: summarize_run
@@ -115,7 +125,7 @@ jobs:
                   echo "### :heavy_check_mark: All checks passed." >> $GITHUB_STEP_SUMMARY
               else
                   echo "### :x: Lua Language Server had errors, but no specific output was found." >> $GITHUB_STEP_SUMMARY
-                  echo "Check the logs of the 'Run Lua Language Server' step for details." >> $GITHUB_STEP_SUMMARY
+                  echo "Check the logs step for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
               fi
           fi
@@ -126,141 +136,144 @@ jobs:
           echo "Lua Language Server failed. See summary for details."
           exit 1
 
-  # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md
-  Build_Linux:
-    name: Build Linux
+  Build:
     needs: Sanity_Checks
-    runs-on: ubuntu-latest
-    env:
-      package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu
-            compiler: clang18
-            build_type: Release
-          - os: ubuntu
+          - os: Windows
+            compiler: msvc19
+            build_type: Debug
+            tracy: 'Tracy'
+            runner: windows-2025
+          - os: Ubuntu
             compiler: gcc14
             build_type: Debug
+            tracy: 'Tracy'
+            runner: ubuntu-24.04
+          - os: macOS
+            compiler: appleClang16
+            build_type: Debug
+            tracy: 'Tracy'
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
+      SCCACHE_DIR: ${{ format('{0}/sccache', github.workspace) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install dependencies (Brew)
+        if: ${{ runner.os == 'macOS' }}
+        run: brew install mariadb zeromq zmq luajit
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-          labels: |
-            org.opencontainers.image.authors=LandSandBoat Dev Teams
-            org.opencontainers.image.title=LandSandBoat Server (${{ matrix.os }})
-            org.opencontainers.image.documentation=https://github.com/LandSandBoat/server/wiki
-          flavor: ${{ format('suffix=-{0}', matrix.compiler) }}
+      - name: Install dependencies (APT)
+        if: ${{ matrix.os == 'Ubuntu' }}
+        run: |
+          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
+            binutils-dev \
+            g++-14 \
+            libluajit-5.1-dev \
+            libmariadb-dev-compat \
+            libssl-dev \
+            libzmq3-dev \
+            mariadb-client \
+            python3-venv \
+            tzdata \
+            zlib1g-dev
 
-      - name: Restore packages cache
-        uses: actions/cache/restore@v4
-        env:
-          hash: ${{ hashFiles(format('./docker/{0}.Dockerfile', matrix.os), './tools/requirements.txt') }}
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v3
+        if: ${{ runner.os == 'Windows' }}
         with:
-          path: |
-            ${{ format('cache-{0}', env.package_manager) }}
-            ${{ format('lib-{0}', env.package_manager) }}
-            ${{ format('cache-pip-{0}', matrix.os) }}
-          key: ${{ format('cache-{0}-{1}-{2}', matrix.os, env.hash, github.base_ref) }}
-          restore-keys: |
-            ${{ format('cache-{0}-{1}-', matrix.os, env.hash) }}
-            ${{ format('cache-{0}-', matrix.os) }}
+          arch: x64
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Restore build cache
         uses: actions/cache/restore@v4
         env:
-          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          cmake_hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          source_hash: ${{ hashFiles('src/**/*', 'ext/**/*') }}
         with:
           path: |
-            ${{ format('build-{0}-{1}', matrix.os, matrix.compiler ) }}
-            ${{ format('ccache-{0}-{1}', matrix.os, matrix.compiler ) }}
-          key: ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}', matrix.os, env.hash, matrix.compiler, matrix.build_type, github.base_ref) }}
+            build
+            ${{ env.SCCACHE_DIR }}
+          key: ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-{5}', matrix.os, matrix.compiler, matrix.build_type, github.base_ref, env.cmake_hash, env.source_hash) }}
           restore-keys: |
-            ${{ format('buildcache-{0}-{1}-{2}-{3}-', matrix.os, env.hash, matrix.compiler, matrix.build_type) }}
-            ${{ format('buildcache-{0}-{1}-{2}-', matrix.os, env.hash, matrix.compiler) }}
+            ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-', matrix.os, matrix.compiler, matrix.build_type, github.base_ref, env.cmake_hash) }}
 
-      # https://github.com/reproducible-containers/buildkit-cache-dance/issues/33
-      - name: Inject cache
-        uses: reproducible-containers/buildkit-cache-dance@v3.2.0
-        with:
-          cache-map: |
-            {
-              ${{ format('"cache-{0}":"/var/cache/{1}",', env.package_manager, env.package_manager) }}
-              ${{ format('"lib-{0}":"/var/lib/{1}",', env.package_manager, env.package_manager) }}
-              ${{ format('"cache-pip-{0}":"/root/.cache/pip",', matrix.os) }}
-              ${{ format('"build-{0}-{1}":"/root/build",', matrix.os, matrix.compiler) }}
-              ${{ format('"ccache-{0}-{1}":"/root/.ccache"', matrix.os, matrix.compiler) }}
-            }
-          skip-extraction: true
+      # TODO: only do this if src modules changed.
+      # - name: Enable modules
+      #   run: |
+      #     python3 <<EOF
+      #     with open("modules/init.txt", "w") as f:
+      #         f.write("custom\n")
+      #         f.write("era\n")
+      #         f.write("example\n")
+      #         f.write("renamer\n")
+      #     EOF
 
-      - name: Set image artifact name
-        id: name_artifact
+      - name: Configure CMake
         run: |
-          actual_artifact_name="${{ format('{0}_image_{1}', matrix.os, matrix.build_type) }}"
-          echo "artifact_name=${actual_artifact_name}" >> $GITHUB_OUTPUT
+          cp -p build/xi_* . 2> /dev/null || true
+          if [[ ${{ matrix.os }} == 'Ubuntu' ]]; then
+              echo "CC=/usr/bin/gcc-14" >> $GITHUB_ENV
+              echo "CXX=/usr/bin/g++-14" >> $GITHUB_ENV
+          fi
+          cmake -G Ninja -S . -B build \
+            -DTRACY_ENABLE=${{ matrix.tracy == 'Tracy' && 'ON' || 'OFF' }} \
+            -DPCH_ENABLE=${{ runner.os == 'Windows' && matrix.build_type == 'Debug' && 'OFF' || 'ON' }} \
+            -DCACHE_OPTION=sccache
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        env:
-          BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
-          artifact_name: ${{ steps.name_artifact.outputs.artifact_name }}
-        with:
-          context: .
-          file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
-          push: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
-          platforms: linux/amd64
-          cache-from: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:server-{1}-{2}-{3}-{4}', github.repository_owner, matrix.os, matrix.compiler, matrix.build_type, github.base_ref) }}
-          build-args: |
-            COMPILER=${{ matrix.compiler }}
-            CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-            TRACY_ENABLE=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
-            REPO_URL=${{ github.server_url }}/${{ github.repository }}.git
-            BRANCH=${{ github.head_ref }}
-          outputs: ${{ matrix.build_type == 'Debug' && format('type=docker,dest={0}/{1}.tar', runner.temp, env.artifact_name) }}
+      - name: Build
+        run: |
+          cmake --build build
 
-      - name: Archive debug image
+      - name: Create artifact
         uses: actions/upload-artifact@v4
-        if: ${{ matrix.build_type == 'Debug' }}
-        env:
-          artifact_name: ${{ steps.name_artifact.outputs.artifact_name }}
         with:
-          name: ${{ env.artifact_name }}
-          path: ${{ format('{0}/{1}.tar', runner.temp, env.artifact_name) }}
+          name: ${{ format('LSB_{0}_{1}_{2}', matrix.os, matrix.build_type, github.sha) }}
+          path: |
+                xi_*
+                ${{ matrix.tracy == 'Tracy' && 'tracy.tar.gz' || '' }}
 
   Startup_Checks_Linux:
-    name: Startup Checks
+    name: Startup Checks (Linux)
+    needs: Build
+    if: ${{ !cancelled() && needs.Build.result == 'success' }}
     runs-on: ubuntu-latest
-    needs: Build_Linux
-    if: ${{ !cancelled() && needs.Build_Linux.result == 'success' }}
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/devtools:ubuntu
+    defaults:
+      run:
+        shell: bash
     env:
-      MARIADB_DATABASE: xidb
-      MARIADB_USER: xiadmin
-      MARIADB_PASSWORD: "password"
+      XI_NETWORK_SQL_HOST: database
+      XI_NETWORK_SQL_PORT: 3306
+      XI_NETWORK_SQL_DATABASE: xidb
+      XI_NETWORK_SQL_LOGIN: xiadmin
+      XI_NETWORK_SQL_PASSWORD: 'password'
     services:
       database:
         image: mariadb:latest
         env:
-          MARIADB_DATABASE: ${{ env.MARIADB_DATABASE }}
-          MARIADB_USER: ${{ env.MARIADB_USER }}
-          MARIADB_PASSWORD: ${{ env.MARIADB_PASSWORD }}
+          MARIADB_DATABASE: ${{ env.XI_NETWORK_SQL_DATABASE }}
+          MARIADB_USER: ${{ env.XI_NETWORK_SQL_LOGIN }}
+          MARIADB_PASSWORD: ${{ env.XI_NETWORK_SQL_PASSWORD }}
           MARIADB_RANDOM_ROOT_PASSWORD: true
         ports:
           - 3306:3306
@@ -270,6 +283,7 @@ jobs:
           --health-timeout=10s
           --health-retries=10
     steps:
+      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -278,47 +292,34 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: ubuntu_image_Debug
-          path: ${{ runner.temp }}
+          name: ${{ format('LSB_Ubuntu_Debug_{0}', github.sha) }}
+          path: .
+      - run: |
+          mv xi_map_tracy xi_map
+          chmod +x xi_*
 
-      - name: Start container
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.number }}
+      - name: Install Python dependencies
         run: |
-          IMAGE_TO_RUN="ghcr.io/${{ github.repository }}:pr-${{ env.PR_NUMBER }}-gcc14"
-          docker load --input ${{ runner.temp }}/ubuntu_image_Debug.tar
+          python -m pip install -r ./tools/requirements.txt
 
-          echo "Attempting to run image: $IMAGE_TO_RUN"
-          docker image inspect "$IMAGE_TO_RUN" > /dev/null 2>&1 || \
-            echo "Warning: Image $IMAGE_TO_RUN not found. Check loaded images and tagging."
-          docker image ls
-
-          docker run -dt \
-            --name test-server \
-            --user root \
-            --network ${{ job.services.database.network }} \
-            --mount type=bind,src=./log,dst=/server/log \
-            --mount type=bind,src=./losmeshes,dst=/server/losmeshes \
-            --mount type=bind,src=./navmeshes,dst=/server/navmeshes \
-            --env XI_NETWORK_SQL_HOST=database \
-            --env XI_NETWORK_SQL_PORT=3306 \
-            --env XI_NETWORK_SQL_DATABASE=${{ env.MARIADB_DATABASE }} \
-            --env XI_NETWORK_SQL_LOGIN=${{ env.MARIADB_USER }} \
-            --env XI_NETWORK_SQL_PASSWORD=${{ env.MARIADB_PASSWORD }} \
-          "$IMAGE_TO_RUN"
+      # TODO: only do this if script/sql modules changed.
+      # - name: Enable modules
+      #   run: |
+      #     python <<EOF
+      #     with open("modules/init.txt", "w") as f:
+      #         f.write("custom\n")
+      #         f.write("era\n")
+      #         f.write("example\n")
+      #         f.write("renamer\n")
+      #     EOF
 
       - name: Initialize database
         id: init_db
-        run: docker exec test-server /bin/bash -c 'python ./tools/dbtool.py update'
+        run: python ./tools/dbtool.py update
 
       - name: Run tests
         id: tests
-        run: docker exec test-server /bin/bash -c 'python -m tools.ci.startup_checks'
-
-      - name: Stop container
-        run: |
-          docker stop test-server
-          docker rm test-server
+        run: python -m tools.ci.startup_checks
 
       - name: Summarize checks
         id: summarize_checks
@@ -337,6 +338,7 @@ jobs:
                       echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                   fi
+                  # TODO: check for tests output
               fi
           done
           if [[ "$found_issues" == "false" ]]; then
@@ -344,7 +346,7 @@ jobs:
                   echo "### :heavy_check_mark: All checks passed." >> $GITHUB_STEP_SUMMARY
               else
                   echo "### :x: Combat check failed, but no specific errors were found." >> $GITHUB_STEP_SUMMARY
-                  echo "Check the logs of the 'Combat tests' step for details." >> $GITHUB_STEP_SUMMARY
+                  echo "Check the logs for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
               fi
           fi
@@ -365,175 +367,29 @@ jobs:
           echo "Startup checks failed. See summary for details."
           exit 1
 
-  # MultiInstance_Startup_Checks_Linux:
-  #   runs-on: ubuntu-24.04
-  #   needs: Linux_Clang18_64bit
-  #   services:
-  #     mysql:
-  #       image: mariadb:10.6
-  #       env:
-  #         MYSQL_DATABASE: xidb
-  #         MYSQL_ROOT_PASSWORD: root
-  #       ports:
-  #         - 3306:3306
-  #       options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=10s --health-retries=10
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 1
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: linux_executables
-  #         path: .
-  #     - name: Install Dependencies
-  #       # TODO: Properly use python venv
-  #       run: |
-  #         python3 -m pip config set global.break-system-packages true
-  #         sudo apt-get update
-  #         sudo apt-get install -y software-properties-common cmake mariadb-client libmariadb-dev-compat libluajit-5.1-dev libzmq3-dev zlib1g-dev libssl-dev luarocks binutils-dev
-  #         python3 -m pip install -r tools/requirements.txt
-  #     - name: Verify MySQL connection from container
-  #       run: |
-  #         mysql -h 127.0.0.1 -uroot -proot -e "SHOW DATABASES"
-  #     - name: Import SQL files
-  #       run: |
-  #         python3 ./tools/dbtool.py setup
-  #     - name: Assign odd zones a different port
-  #       run: |
-  #         mysql xidb -h 127.0.0.1 -uroot -proot -e "UPDATE xidb.zone_settings SET zoneport = 54231 WHERE zoneid % 2 = 0;"
-  #     - name: Copy settings
-  #       run: |
-  #         cp settings/default/* settings/
-  #     - name: Startup checks
-  #       env:
-  #         MYSQL_HOST: mysql
-  #       run: |
-  #         chmod +x xi_connect
-  #         chmod +x xi_map
-  #         chmod +x xi_search
-  #         chmod +x xi_world
-  #         ls -l
-
-  #         printf "\nStart server processes\n"
-  #         screen -d -m -S xi_connect ./xi_connect --log login-server.log
-  #         screen -d -m -S xi_search ./xi_search --log search-server.log
-  #         screen -d -m -S xi_map ./xi_map --log map-server-0.log --ip 127.0.0.1 --port 54230
-  #         screen -d -m -S xi_map ./xi_map --log map-server-1.log --ip 127.0.0.1 --port 54231
-  #         screen -d -m -S xi_world ./xi_world --log world-server.log
-  #         sleep 300s
-  #         killall screen
-  #     - name: Check for errors and warnings
-  #       if: ${{ success() || failure() }}
-  #       run: |
-  #         cat login-server*.log
-  #         cat search-server*.log
-  #         cat map-server-0*.log
-  #         cat map-server-1*.log
-  #         cat world-server*.log
-
-  #         if grep -qi "warning\|error\|crash" login-server*.log; then
-  #             exit -1
-  #         fi
-
-  #         if grep -qi "warning\|error\|crash" search-server*.log; then
-  #             exit -1
-  #         fi
-
-  #         if grep -qi "warning\|error\|crash" map-server-0*.log; then
-  #             exit -1
-  #         fi
-
-  #         if grep -qi "warning\|error\|crash" map-server-1*.log; then
-  #           exit -1
-  #         fi
-
-  #         if grep -qi "warning\|error\|crash" world-server*.log; then
-  #           exit -1
-  #         fi
-
-  # https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md
-  Build_Windows:
-    name: Build Windows
-    needs: Sanity_Checks
-    runs-on: windows-2025
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        build_type: [Release, Debug]
-    steps:
-      - uses: microsoft/setup-msbuild@v2
-        with:
-          msbuild-architecture: x64
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Restore build cache
-        uses: actions/cache/restore@v4
-        env:
-          hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
-        with:
-          path: build
-          key: ${{ format('buildcache-windows-{0}-{1}-{2}', env.hash, matrix.build_type, github.base_ref) }}
-          restore-keys: |
-            ${{ format('buildcache-windows-{0}-{1}-', env.hash, matrix.build_type) }}
-            ${{ format('buildcache-windows-{0}-', env.hash) }}
-
-      # TODO: only do this if src modules changed.
-      # - name: Enable modules
-      #   run: |
-      #     python3 <<EOF
-      #     with open("modules/init.txt", "w") as f:
-      #         f.write("custom\n")
-      #         f.write("era\n")
-      #         f.write("example\n")
-      #         f.write("renamer\n")
-      #     EOF
-
-      - name: Configure CMake
-        run: |
-          cp -p build/xi_* . 2> /dev/null || true
-          rm CMakeCache.txt || true
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DTRACY_ENABLE=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
-
-      - name: Build
-        run: |
-          cmake --build build -j$(nproc)
-
-      - name: Archive debug executables
-        uses: actions/upload-artifact@v4
-        if: ${{ matrix.build_type == 'Debug' }}
-        with:
-          name: windows_executables_Debug
-          path: |
-            xi_*
-            src/common/version.cpp
-            build
-            tracy.tar.gz
-
   Startup_Checks_Windows:
-    name: Startup Checks
+    name: Startup Checks (Windows)
     runs-on: windows-2025
-    needs: Build_Windows
-    if: ${{ !cancelled() && needs.Build_Windows.result == 'success' }}
+    needs: Build
+    if: ${{ !cancelled() && needs.Build.result == 'success' }}
     defaults:
       run:
         shell: bash
+    env:
+      XI_NETWORK_SQL_HOST: 127.0.0.1
+      XI_NETWORK_SQL_PORT: 3306
+      XI_NETWORK_SQL_DATABASE: xidb
+      XI_NETWORK_SQL_LOGIN: root
+      XI_NETWORK_SQL_PASSWORD: 'root'
     steps:
       - uses: actions/setup-python@v5
         id: setup_python
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
       - uses: zach2good/setup-mariadb@v1
         with:
-          database: xidb
+          database: ${{ env.XI_NETWORK_SQL_DATABASE }}
 
       - uses: actions/checkout@v4
         with:
@@ -542,21 +398,22 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: windows_executables_Debug
+          name: ${{ format('LSB_Windows_Debug_{0}', github.sha) }}
           path: .
-      - run: mv xi_map_tracy.exe xi_map.exe
+      - run: |
+          mv xi_map_tracy xi_map
+          chmod +x xi_*
 
-      - name: Restore Python cache
+      - name: Restore Python virtual environment
         id: python-cache
         uses: actions/cache/restore@v4
         env:
           hash: ${{ hashFiles('./tools/requirements.txt') }}
         with:
           path: .venv
-          key: ${{ format('cache-windows-{0}-{1}', env.hash, github.base_ref) }}
+          key: ${{ format('venv-Windows-{0}-{1}', env.hash, github.base_ref) }}
           restore-keys: |
-            ${{ format('cache-windows-{0}-', env.hash) }}
-            cache-windows-
+            ${{ format('venv-Windows-{0}-', env.hash) }}
 
       - name: Install Python dependencies
         if: ${{ !steps.python-cache.outputs.cache-hit }}
@@ -569,13 +426,6 @@ jobs:
         run: |
           echo ".venv/Scripts" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
-
-      - name: Verify Python virtual environment
-        run: |
-          which python
-          python --version
-          python -m pip --version
-          python -m pip list
 
       # TODO: only do this if src modules changed.
       # - name: Enable modules
@@ -612,6 +462,7 @@ jobs:
                       echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                   fi
+                  # TODO: check for tests output
               fi
           done
           if [[ "$found_issues" == "false" ]]; then
@@ -619,7 +470,7 @@ jobs:
                   echo "### :heavy_check_mark: All tests passed." >> $GITHUB_STEP_SUMMARY
               else
                   echo "### :x: Startup tests failed, but no specific errors were found." >> $GITHUB_STEP_SUMMARY
-                  echo "Check the logs of the 'Startup tests' step for details." >> $GITHUB_STEP_SUMMARY
+                  echo "Check the logs for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
               fi
           fi
@@ -639,23 +490,3 @@ jobs:
         run: |
           echo "Startup checks failed. See summary for details."
           exit 1
-
-  # https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
-  Build_MacOS:
-    name: Build MacOS
-    needs: Sanity_Checks
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-      - name: Install Dependencies (Brew)
-        run: |
-          brew install mariadb zeromq zmq luajit
-      - name: Configure CMake
-        run: |
-          mkdir -p build
-          cmake -S . -B build
-      - name: Build
-        run: |
-          cmake --build build -j4

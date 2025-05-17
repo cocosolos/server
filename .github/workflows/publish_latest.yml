@@ -132,7 +132,8 @@ jobs:
         with:
           name: LSB_Windows_Release_${{ github.sha }}
           path: |
-            *.exe
+            xi_*
+            ${{ matrix.tracy == 'Tracy' && 'tracy.tar.gz' || '' }}
 
   Docker_Build:
     name: Docker Build

@@ -104,29 +104,25 @@ def setup_test_character():
     try:
         # Create an account
         cur.execute(
-            "REPLACE INTO accounts (id, login, password, timecreate, timelastmodify, status, priv) \
-                VALUES(1000, 'admin1', '$PASSWORD_HASH', NOW(), NOW(), 1, 1); \
-                    SELECT id, login, content_ids FROM accounts;"
+            f"REPLACE INTO accounts (id, login, password, timecreate, timelastmodify, status, priv) \
+                VALUES(1000, 'admin1', '{PASSWORD_HASH}', NOW(), NOW(), 1, 1);"
         )
         # Create a character
         cur.execute(
             "REPLACE INTO chars (charid, accid, charname, pos_zone, nation, gmlevel) \
-                VALUES(1, 1000, 'Test', 0, 0, 5); \
-                    SELECT charid, accid, charname, pos_zone FROM chars;"
+                VALUES(1, 1000, 'Test', 0, 0, 5);"
         )
         # Set char_look (default is 0 and trips up scripting)
         cur.execute(
             "REPLACE INTO char_look (charid, face, race, size, head, body, hands, legs, feet, main, sub, ranged) \
-                VALUES (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1); \
-                    SELECT charid, face, race FROM char_look;"
+                VALUES (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);"
         )
         # Populate more char tables with defaults
-        cur.execute(
-            "REPLACE INTO char_stats (charid, mjob) VALUES(1, 1); \
-                SELECT charid, mjob FROM char_stats;"
-        )
+        cur.execute("REPLACE INTO char_stats (charid, mjob) VALUES(1, 1);")
+        db.commit()
         return 0
     except:
+        print("An error occurred.")
         return -1
 
 
@@ -271,6 +267,7 @@ def main():
             from tools.headlessxi.hxiclient import HXIClient
 
             print("All processes reached 'ready to work'! Starting tests.")
+            fetch_credentials()
             connect()
             hxi_client = HXIClient("admin1", "admin1", "localhost")
             for test in tests:
