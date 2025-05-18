@@ -17,17 +17,17 @@ on:
         description: 'CMake build type.'
         required: true
         type: string
-      save-cache:
+      save_cache:
         description: 'Save build and Python virtual environment to cache.'
         required: false
         type: boolean
         default: false
-      build-modules:
+      build_modules:
         description: 'Build with modules enabled.'
         required: false
         type: boolean
         default: false
-      upload-artifact:
+      upload_artifact:
         description: 'Upload built executables.'
         required: false
         type: boolean
@@ -132,9 +132,8 @@ jobs:
           restore-keys: |
             ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-', inputs.os, inputs.compiler, inputs.build_type, env.ref, env.cmake_hash) }}
 
-      # TODO: only do this if src modules changed.
       - name: Enable modules
-        if: ${{ inputs.build-modules }}
+        if: ${{ inputs.build_modules }}
         run: |
           python3 <<EOF
           with open("modules/init.txt", "w") as f:
@@ -181,7 +180,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        if: ${{ inputs.upload-artifact }}
+        if: ${{ inputs.upload_artifact }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ format('LSB_{0}_{1}_{2}', inputs.os, inputs.build_type, github.sha) }}
@@ -190,7 +189,7 @@ jobs:
                 tracy.tar.gz
 
       - name: Cache Python virtual environment
-        if: ${{ inputs.save-cache && !steps.restore_python.outputs.cache-hit }}
+        if: ${{ inputs.save_cache && !steps.restore_python.outputs.cache-hit }}
         uses: actions/cache/save@v4
         env:
           hash: ${{ hashFiles('./tools/requirements.txt') }}
@@ -200,7 +199,7 @@ jobs:
           key: ${{ format('venv-{0}-{1}-{2}', inputs.os, env.hash, env.ref) }}
 
       - name: Cache build
-        if: ${{ inputs.save-cache && !steps.restore_build.outputs.cache-hit }}
+        if: ${{ inputs.save_cache && !steps.restore_build.outputs.cache-hit }}
         uses: actions/cache/save@v4
         env:
           cmake_hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}

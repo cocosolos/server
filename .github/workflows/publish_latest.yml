@@ -48,8 +48,8 @@ jobs:
       compiler: ${{ matrix.compiler }}
       build_type: ${{ matrix.build_type }}
       runner: ${{ matrix.runner }}
-      save-cache: ${{ matrix.name == 'Cache' }}
-      upload-artifact: ${{ matrix.name == 'Release' }}
+      save_cache: ${{ matrix.name == 'Cache' }}
+      upload_artifact: ${{ matrix.name == 'Release' }}
       summarize: ${{ matrix.name == 'Clang Tidy' }}
 
   Docker:

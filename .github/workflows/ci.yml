@@ -1,12 +1,11 @@
 name: ci
 
 on:
-  workflow_dispatch:
-  # pull_request:
-  #   types:
-  #     - opened
-  #     - synchronize
-  #     - reopened
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -137,120 +136,42 @@ jobs:
           echo "Lua Language Server failed. See summary for details."
           exit 1
 
+  # This doubles minimum completion time and floods the summary.
+  # TODO: We should at least filter the output.
+  # Clang_Tidy:
+  #   needs: Sanity_Checks
+  #   name: Clang Tidy
+  #   uses: ./.github/workflows/build.yml
+  #   with:
+  #     os: Ubuntu
+  #     build_type: Debug
+  #     runner: ubuntu-24.04
+  #     compiler: clang18
+  #     summarize: true
+
   Build:
     needs: Sanity_Checks
+    name: ${{ format('Build ({0})', matrix.os) }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: Windows
-            compiler: msvc19
-            build_type: Debug
-            tracy: 'Tracy'
             runner: windows-2025
+            compiler: msvc19
           - os: Ubuntu
-            compiler: gcc14
-            build_type: Debug
-            tracy: 'Tracy'
             runner: ubuntu-24.04
+            compiler: gcc14
           - os: macOS
-            compiler: appleClang16
-            build_type: Debug
-            tracy: 'Tracy'
             runner: macos-15
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
-      SCCACHE_DIR: ${{ format('{0}/sccache', github.workspace) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Install dependencies (Brew)
-        if: ${{ runner.os == 'macOS' }}
-        run: brew install mariadb zeromq zmq luajit
-
-      - name: Install dependencies (APT)
-        if: ${{ matrix.os == 'Ubuntu' }}
-        run: |
-          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
-            binutils-dev \
-            g++-14 \
-            libluajit-5.1-dev \
-            libmariadb-dev-compat \
-            libssl-dev \
-            libzmq3-dev \
-            mariadb-client \
-            python3-venv \
-            tzdata \
-            zlib1g-dev
-
-      - name: Setup MSVC
-        uses: TheMrMilchmann/setup-msvc-dev@v3
-        if: ${{ runner.os == 'Windows' }}
-        with:
-          arch: x64
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Restore build cache
-        uses: actions/cache/restore@v4
-        env:
-          cmake_hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
-          source_hash: ${{ hashFiles('src/**/*', 'ext/**/*') }}
-        with:
-          path: |
-            build
-            ${{ env.SCCACHE_DIR }}
-          key: ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-{5}', matrix.os, matrix.compiler, matrix.build_type, github.base_ref, env.cmake_hash, env.source_hash) }}
-          restore-keys: |
-            ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-', matrix.os, matrix.compiler, matrix.build_type, github.base_ref, env.cmake_hash) }}
-
-      # TODO: only do this if src modules changed.
-      # - name: Enable modules
-      #   run: |
-      #     python3 <<EOF
-      #     with open("modules/init.txt", "w") as f:
-      #         f.write("custom\n")
-      #         f.write("era\n")
-      #         f.write("example\n")
-      #         f.write("renamer\n")
-      #     EOF
-
-      - name: Configure CMake
-        run: |
-          cp -p build/xi_* . 2> /dev/null || true
-          if [[ ${{ matrix.os }} == 'Ubuntu' ]]; then
-              echo "CC=/usr/bin/gcc-14" >> $GITHUB_ENV
-              echo "CXX=/usr/bin/g++-14" >> $GITHUB_ENV
-          fi
-          cmake -G Ninja -S . -B build \
-            -DTRACY_ENABLE=${{ matrix.tracy == 'Tracy' && 'ON' || 'OFF' }} \
-            -DPCH_ENABLE=${{ runner.os == 'Windows' && matrix.build_type == 'Debug' && 'OFF' || 'ON' }} \
-            -DCACHE_OPTION=sccache
-
-      - name: Build
-        run: |
-          cmake --build build
-
-      - name: Create artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ format('LSB_{0}_{1}_{2}', matrix.os, matrix.build_type, github.sha) }}
-          path: |
-                xi_*
-                ${{ matrix.tracy == 'Tracy' && 'tracy.tar.gz' || '' }}
+            compiler: appleClang16
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler: ${{ matrix.compiler }}
+      build_type: Debug
+      runner: ${{ matrix.runner }}
+      upload_artifact: true
 
   Startup_Checks_Linux:
     name: Startup Checks (Linux)
