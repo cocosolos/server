@@ -12,173 +12,48 @@ concurrency:
 
 jobs:
   Build:
-    name: ${{ format('{0} ({1}, {2})', matrix.name, matrix.os, matrix.compiler) }}
+    name: ${{ format('{0} ({1})', matrix.name, matrix.os) }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Release
             os: Windows
-            compiler: msvc19
             build_type: Release
-            tracy: 'Tracy'
             runner: windows-2025
+            compiler: msvc19
           - name: Cache
             os: Windows
-            compiler: msvc19
             build_type: Debug
-            tracy: 'Tracy'
             runner: windows-2025
+            compiler: msvc19
           - name: Cache
             os: macOS
-            compiler: appleClang16
             build_type: Debug
-            tracy: 'Tracy'
             runner: macos-15
+            compiler: appleClang16
           - name: Cache
             os: Ubuntu
-            compiler: gcc14
             build_type: Debug
-            tracy: 'Tracy'
             runner: ubuntu-24.04
+            compiler: gcc14
           - name: Clang Tidy
             os: Ubuntu
-            compiler: clang18
             build_type: Debug
-            tracy: 'Tracy'
             runner: ubuntu-24.04
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
-      SCCACHE_DIR: ${{ format('{0}/sccache', github.workspace) }}
-    steps:
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - uses: TheMrMilchmann/setup-msvc-dev@v3
-        if: ${{ runner.os == 'Windows' }}
-        with:
-          arch: x64
-
-      - uses: mozilla-actions/sccache-action@v0.0.9
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies (Brew)
-        if: ${{ runner.os == 'macOS' }}
-        run: brew install mariadb zeromq zmq luajit
-
-      - name: Install dependencies (APT)
-        if: ${{ matrix.os == 'Ubuntu' }}
-        run: |
-          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
-            binutils-dev \
-            g++-14 \
-            libluajit-5.1-dev \
-            libmariadb-dev-compat \
-            libssl-dev \
-            libzmq3-dev \
-            mariadb-client \
-            python3-venv \
-            tzdata \
-            zlib1g-dev
-
-      # If libc++ build is wanted (Alpine uses this with Clang20)
-      # - name: Install Clang
-      #   if: ${{ matrix.os == 'Ubuntu' && matrix.compiler == 'clang18' }}
-      #   run: |
-      #     sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
-      #       clang-18 \
-      #       lld-18 \
-      #       libc++-18-dev \
-      #       libc++abi-18-dev \
-      #       libclang-rt-18-dev \
-      #       libunwind-18-dev
-
-      - name: Cache Python virtual environment
-        uses: actions/cache@v4
-        env:
-          hash: ${{ hashFiles('./tools/requirements.txt') }}
-        with:
-          path: .venv
-          key: ${{ format('venv-{0}-{1}-{2}', matrix.os, env.hash, github.ref_name) }}
-
-      - name: Install Python dependencies
-        env:
-          venv_scripts: ${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}
-        run: |
-          python3 -m venv .venv
-          source ${{ format('.venv/{0}/activate', env.venv_scripts) }}
-          python -m pip install -r ./tools/requirements.txt
-
-      - name: Cache build
-        if: ${{ matrix.build_type != 'Release' }}
-        uses: actions/cache@v4
-        env:
-          cmake_hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
-          source_hash: ${{ hashFiles('src/**/*', 'ext/**/*') }}
-        with:
-          path: |
-            build
-            ${{ env.SCCACHE_DIR }}
-          key: ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-{5}', matrix.os, matrix.compiler, matrix.build_type, github.ref_name, env.cmake_hash, env.source_hash) }}
-          restore-keys: |
-            ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}-', matrix.os, matrix.compiler, matrix.build_type, github.ref_name, env.cmake_hash) }}
-
-      - name: Configure CMake
-        run: |
-          if [[ ${{ matrix.os }} == 'Ubuntu' ]]; then
-              if [[ ${{ matrix.compiler }} == 'clang18' ]]; then
-                  export CC=/usr/bin/clang-18
-                  export CXX=/usr/bin/clang++-18
-                  # export CXXFLAGS="-stdlib=libc++"
-                  # export LDFLAGS="-fuse-ld=lld -lstdc++"
-              else
-                  export CC=/usr/bin/gcc-14
-                  export CXX=/usr/bin/g++-14
-              fi
-          fi
-          cmake -G Ninja -S . -B build \
-            -DTRACY_ENABLE=${{ matrix.tracy == 'Tracy' && 'ON' || 'OFF' }} \
-            -DENABLE_CLANG_TIDY=${{ matrix.os == 'Ubuntu' && matrix.compiler == 'clang18' && 'ON' || 'OFF' }} \
-            -DPCH_ENABLE=${{ runner.os == 'Windows' && matrix.build_type == 'Debug' && 'OFF' || 'ON' }} \
-            -DCACHE_OPTION=sccache
-
-      - name: Build
-        run: |
-          cmake --build build | tee build.log
-          cp -p xi_* build/
-
-      - name: Archive executables
-        uses: actions/upload-artifact@v4
-        if: ${{ runner.os == 'Windows' && matrix.build_type == 'Release' }}
-        with:
-          name: LSB_Windows_Release_${{ github.sha }}
-          path: |
-            xi_*
-            ${{ matrix.tracy == 'Tracy' && 'tracy.tar.gz' || '' }}
-
-      - name: Summarize Clang
-        id: summarize_checks
-        if: ${{ matrix.os == 'Ubuntu' && matrix.compiler == 'clang18'  }}
-        run: |
-          echo "## Clang Tidy" >> $GITHUB_STEP_SUMMARY
-          if [[ -f "build.log" && -s "build.log" ]]; then
-              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-              cat build.log >> $GITHUB_STEP_SUMMARY
-              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-          fi
+            compiler: clang18
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      compiler: ${{ matrix.compiler }}
+      build_type: ${{ matrix.build_type }}
+      runner: ${{ matrix.runner }}
+      save-cache: ${{ matrix.name == 'Cache' }}
+      upload-artifact: ${{ matrix.name == 'Release' }}
+      summarize: ${{ matrix.name == 'Clang Tidy' }}
 
   Docker:
-    name: ${{ format('Release ({0}, {1})', matrix.os, matrix.compiler) }}
+    name: ${{ format('Docker Release ({0}, {1})', matrix.os, matrix.compiler) }}
     strategy:
       fail-fast: false
       matrix:
@@ -191,8 +66,6 @@ jobs:
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969
       package_manager: ${{ matrix.os == 'alpine' && 'apk' || 'apt' }}
-      build_type: Release
-      tracy: OFF
     steps:
       - uses: docker/login-action@v3
         with:
@@ -223,33 +96,24 @@ jobs:
 
       - name: Docker build and push
         uses: docker/build-push-action@v6
-        env:
-          cache_key: ${{ format('{0}-{1}-{2}-{3}', matrix.os, matrix.compiler, env.build_type, github.ref_name) }}
         with:
           context: .
           file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
-          push: ${{ env.build_type == 'Release' }}
+          push: true
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           annotations: ${{ steps.docker-meta.outputs.annotations }}
           platforms: linux/amd64
-          cache-from: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:server-{1}', github.repository_owner, env.cache_key) }}
-          cache-to: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:server-{1},mode=max', github.repository_owner, env.cache_key) }}
           build-args: |
             COMPILER=${{ matrix.compiler }}
-            CMAKE_BUILD_TYPE=${{ env.build_type }}
-            TRACY_ENABLE=${{ env.tracy }}
             REPO_URL=${{ github.server_url }}/${{ github.repository }}.git
             BRANCH=${{ github.ref_name }}
 
       - name: Build devtools image
         uses: docker/build-push-action@v6
-        if: ${{ env.build_type == 'Release' }}
         with:
           context: .
           file: ${{ format('./docker/{0}.Dockerfile', matrix.os) }}
           target: devtools
           push: true
           tags: ${{ format('ghcr.io/{0}/devtools:{1}', github.repository_owner, matrix.os) }}
-          cache-from: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:devtools-{1}', github.repository_owner, matrix.os) }}
-          cache-to: ${{ format('type=registry,ref=ghcr.io/{0}/buildcache:devtools-{1},mode=max', github.repository_owner, matrix.os) }}
