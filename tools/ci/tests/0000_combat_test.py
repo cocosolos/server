@@ -2,11 +2,12 @@ import time
 
 
 def test_name():
-    return "Combat"
+    return "Login"
 
 
 def execute_test(cur, db, hxi_client):
     try:
+        # Place near some Robber Crabs in Kuftal Tunnel
         cur.execute(
             "UPDATE chars SET \
             pos_zone = 174, \
@@ -16,14 +17,11 @@ def execute_test(cur, db, hxi_client):
             pos_z = -140 \
         WHERE charid = 1;"
         )
-
-        cur.execute(
-            "SELECT charid, accid, charname, pos_zone, pos_x, pos_y, pos_z FROM chars;"
-        )
-        # Set GodMode CharVar = 1
+        # Set GodMode
         cur.execute(
             "INSERT INTO char_vars(charid, varname, value) VALUES(1, 'GodMode', 1);"
         )
+        db.commit()
 
         hxi_client.login()
         print("Sleeping 60s")
