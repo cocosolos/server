@@ -255,3 +255,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+__pycache__
+
+ci_report.md
