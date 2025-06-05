@@ -1,3 +1,7 @@
+sql/backups/*.sql
+
+# .gitignore
+
 # Build Folders (you can keep bin if you'd like, to store dlls and pdbs)
 [Bb]in/
 [Oo]bj/
@@ -136,7 +140,6 @@ UpgradeLog*.XML
 /xi_connect*
 /xi_map*
 /xi_search*
-/xi_test*
 /xi_world*
 
 # Generated files, mostly autotools-related
@@ -174,7 +177,6 @@ log/leaks.txt
 .luarc.json
 lua-language-server*
 check.json
-lua_lang_errors.txt
 
 # VSCode
 .vscode
@@ -230,9 +232,6 @@ memcheck.out.*
 # Auto-generated files
 /src/common/version.cpp
 
-# Module init file
-modules/init.txt
-
 # Doxygen
 doxygen/
 
@@ -250,12 +249,15 @@ xi_search.dSYM
 
 # Environments
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
-# Test artifacts
-*.ctrf.json
+**/.venv/
+**/venv/
+
+__pycache__/
+*.pyc
+*.pyo
+.idea/
+
+*_checks.md
+*_checks.txt
+
