@@ -222,7 +222,7 @@ target_include_directories(xi_map
         ${module_include_dirs}
 )
 
-if(NOT ${ENABLE_CLANG_TIDY})
+if(PCH_ENABLE)
     target_precompile_headers(xi_map PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pch.h)
 endif()
 
