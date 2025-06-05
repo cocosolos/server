@@ -20,6 +20,7 @@
 */
 
 #include "test_case.h"
+#include <format>
 #include <utility>
 
 TestCase::TestCase(std::string name, std::optional<sol::protected_function> func, std::string parentPath)
