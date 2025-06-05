@@ -259,3 +259,7 @@ venv.bak/
 
 # Test artifacts
 *.ctrf.json
+__pycache__
+
+ci_report.md
+changed-files.txt

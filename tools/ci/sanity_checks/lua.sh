@@ -5,9 +5,10 @@
 # luarocks install luacheck --local
 # luarocks install lanes --local
 
-target=${1:-scripts}
+targets=("$@")
+any_issues=false
 
-global_funcs=`python3 << EOF
+global_funcs=`python << EOF
 import re
 file = open('src/map/lua/luautils.cpp', 'r')
 data = file.read()
@@ -123,12 +124,59 @@ ignore_rules=(
     542 # empty if branch
 )
 
-~/.luarocks/bin/luacheck ${target} \
---quiet --jobs 4 --no-config --codes \
---no-unused-args \
---no-max-line-length \
---max-cyclomatic-complexity 30 \
---globals ${global_funcs[@]} ${global_objects[@]} \
---ignore ${ignores[@]} ${ignore_rules[@]} | grep -v "Total:"
+binding_usage_output=$(python tools/ci/sanity_checks/lua_binding_usage.py 2>&1 || true)
 
-python3 ./tools/ci/lua_stylecheck.py ${target}
+if [[ -n "$binding_usage_output" ]]; then
+    any_issues=true
+    echo "## :x: Lua Checks Failed"
+    echo "### Lua Binding Usage:"
+    echo '```'
+    echo "$binding_usage_output"
+    echo '```'
+    echo
+fi
+
+for file in "${targets[@]}"; do
+    [[ -f $file && $file == *.lua && $file != 'tools/ci/sanity_checks/lua_stylecheck.lua' ]] || continue
+
+    # Run tools and capture output
+    luacheck_output=$(luacheck "$file" \
+    --quiet --jobs 4 --no-config --codes \
+    --no-color \
+    --no-unused-args \
+    --no-max-line-length \
+    --max-cyclomatic-complexity 30 \
+    --globals ${global_funcs[@]} ${global_objects[@]} \
+    --ignore ${ignores[@]} ${ignore_rules[@]} | grep -v "Total:" 2>&1 || true)
+    stylecheck_output=$(python tools/ci/sanity_checks/lua_stylecheck.py "$file" 2>&1 || true)
+
+    # Check if there were issues
+    if [[ -n "$luacheck_output" || -n "$stylecheck_output" ]]; then
+        if ! $any_issues; then
+            echo "## :x: Lua Checks Failed"
+            any_issues=true
+        fi
+
+        echo "### \`$file\`"
+        if [[ -n "$luacheck_output" ]]; then
+            echo "#### Luacheck:"
+            echo '```'
+            echo "$luacheck_output" | sed \
+                -e '/^Checking /d' \
+                -e '/^\s*$/d' \
+                -e 's/^[[:space:]]\{4\}//'
+            echo '```'
+            echo
+        fi
+        [[ -n "$stylecheck_output" ]] && echo "$stylecheck_output"
+        echo
+    fi
+done
+
+# If no section was written, emit a success summary
+if ! $any_issues; then
+    echo "## :heavy_check_mark: Lua Checks Passed"
+    echo
+fi
+
+$any_issues && exit 1 || exit 0

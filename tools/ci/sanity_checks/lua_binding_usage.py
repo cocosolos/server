@@ -152,7 +152,7 @@ def main():
                         ):
                             filename = filename.replace("\\", "/")
                             print(
-                                f"Could not find function match for {match.group()} ({filename}:{counter}:{match.start() + 1})"
+                                f"{filename}:{counter}:{match.start() + 1}: Could not find function match for {match.group()}"
                             )
 
 
