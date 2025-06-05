@@ -257,3 +257,8 @@ venv.bak/
 
 # Test artifacts
 *.ctrf.json
+__pycache__
+
+sanity_checks_summary.md
+changed-files.txt
+clang_tidy_summary.md

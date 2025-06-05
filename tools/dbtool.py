@@ -487,7 +487,15 @@ def import_file(file):
         )
         return
     print("Importing " + file)
-    query = f"SET autocommit=0; SET unique_checks=0; SET foreign_key_checks=0; SOURCE {file}; SET unique_checks=1; SET foreign_key_checks=1; COMMIT;"
+    query = f"""
+    SET autocommit=0;
+    SET unique_checks=0;
+    SET foreign_key_checks=0;
+    SOURCE {file};
+    SET unique_checks=1;
+    SET foreign_key_checks=1;
+    COMMIT;
+    """
     _ = db_query(query)
 
 
@@ -951,7 +959,7 @@ def offload_to_auction_house_history():
 
 
 def announce_menu():
-    from announce import send_server_message
+    from tools.announce import send_server_message
 
     message = input("What message would you like to send to the whole server?\n> ")
     if (
@@ -1301,7 +1309,6 @@ def main():
         if not os.path.exists(mysql_bin + "mysql" + exe):
             adjust_mysql_bin()
             write_configs()
-        fetch_versions()
         # CLI args
         if len(sys.argv) > 1:
             arg1 = str(sys.argv[1])
@@ -1313,10 +1320,12 @@ def main():
                 return
             elif "migrate" == arg1:
                 if connect() != False:
+                    fetch_versions()
                     run_all_migrations(True)
                     close()
                 return
             elif "update" == arg1:
+                fetch_versions()
                 full_update = False
                 if len(sys.argv) > 2 and str(sys.argv[2]) == "full":
                     full_update = True
@@ -1352,8 +1361,7 @@ def main():
                         text=True,
                     )
                     fetch_errors(query, result)
-                    setup_db()
-                else:
+                    fetch_versions()
                     setup_db()
                 return
             elif "dump" == arg1:
@@ -1364,6 +1372,7 @@ def main():
                 return
         # Main loop
         print(colorama.ansi.clear_screen())
+        fetch_versions()
         connect()
         while cur:
             colorama.init(autoreset=True)
