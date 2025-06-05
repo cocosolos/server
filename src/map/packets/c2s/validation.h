@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <format>
+#include <set>
 #include "magic_enum/magic_enum.hpp"
 
 enum LSTYPE : std::uint8_t;
