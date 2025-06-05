@@ -65,11 +65,15 @@ if(MSVC)
 
     if(CMAKE_BUILD_TYPE STREQUAL Debug)
         # /EDITANDCONTINUE isn't supported, it messes with Tracy
+        set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
+        cmake_policy(SET CMP0141 NEW)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /INCREMENTAL /SAFESEH:NO")
         list(APPEND FLAGS_AND_DEFINES
-            /Zi # The /Zi option produces a separate PDB file that contains all the symbolic debugging information for use with the debugger.
+            /Z7 # embeds debug information directly into the .obj files rather than creating separate .pdb files, less sensitive to absolute paths
             /GR # Enable RTTI
         )
+        string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
     else()
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /INCREMENTAL:NO /LTCG /OPT:REF /OPT:ICF")
         list(APPEND FLAGS_AND_DEFINES
