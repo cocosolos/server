@@ -128,29 +128,23 @@ const std::vector<std::string> logNames = {
     "trace",
 };
 
-void logging::InitializeLog(std::string const& serverName, std::string const& logFile, bool appendDate)
+void logging::InitializeConsoleLogger(std::string const& serverName)
 {
     ServerName = serverName;
 
-    // If you create more than one worker thread, messages may be delivered out of order
+    // Only initialize once per process
+    static bool initialized = false;
+    if (initialized)
+    {
+        return;
+    }
+
     spdlog::init_thread_pool(8192, 1);
     spdlog::flush_on(spdlog::level::warn);
     spdlog::flush_every(5s);
 
-    // Sink to console
     std::vector<spdlog::sink_ptr> sinks;
     sinks.emplace_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
-
-    // Daily Sink, creating new files at midnight
-    if (appendDate)
-    {
-        sinks.emplace_back(std::make_shared<spdlog::sinks::daily_file_sink_mt>(logFile, 0, 0, false, 0));
-    }
-    // Basic sink, sink to file with name specified in main routine
-    else
-    {
-        sinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile));
-    }
 
     for (auto& name : logNames)
     {
@@ -159,8 +153,35 @@ void logging::InitializeLog(std::string const& serverName, std::string const& lo
     }
 
     spdlog::set_level(spdlog::level::debug);
-
     spdlog::enable_backtrace(16);
+
+    initialized = true;
+}
+
+void logging::AddFileSink(std::string const& logFile, const bool appendDate)
+{
+    // Create the file sink
+    spdlog::sink_ptr fileSink;
+    if (appendDate)
+    {
+        fileSink = std::make_shared<spdlog::sinks::daily_file_sink_mt>(logFile, 0, 0, false, 0);
+    }
+    else
+    {
+        fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFile);
+    }
+
+    // Add to all existing loggers
+    for (auto& name : logNames)
+    {
+        if (auto logger = spdlog::get(name))
+        {
+            if (const auto asyncLogger = std::dynamic_pointer_cast<spdlog::async_logger>(logger))
+            {
+                asyncLogger->sinks().push_back(fileSink);
+            }
+        }
+    }
 }
 
 void logging::ShutDown()

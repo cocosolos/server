@@ -43,7 +43,6 @@ deprecated_requires = [
 
 invalid_enums = [
     "xi.items.",
-    "xi.effects.",
 ]
 
 # 'functionName' : [ noNumberInParamX, noNumberInParamY, ... ],
@@ -578,7 +577,7 @@ elif target == "test":
     total_errors = LuaStyleCheck(
         "tools/ci/sanity_checks/lua_stylecheck.lua", show_errors=False
     ).errcount
-    expected_errors = 82
+    expected_errors = 81
 else:
     total_errors = LuaStyleCheck(target).errcount
 

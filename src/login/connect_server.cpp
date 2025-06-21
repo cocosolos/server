@@ -21,6 +21,7 @@
 
 #include "connect_server.h"
 
+#include "common/arguments.h"
 #include "common/timer.h"
 
 namespace
@@ -49,13 +50,16 @@ ConnectServer::ConnectServer(int argc, char** argv)
 
 ConnectServer::~ConnectServer() = default;
 
-void ConnectServer::run()
+auto ConnectServer::onInitialize() -> bool
 {
-    // Generate a self signed cert if one doesn't exist.
+    // Generate a self-signed cert if one doesn't exist.
     certificateHelpers::generateSelfSignedCert();
 
-    ShowInfo("creating ports");
+    return true;
+}
 
+auto ConnectServer::onRun() -> int
+{
     // TODO: Why can't the ASIO setup be done in the constructor?
 
     // Handler creates session of type T for specific port on connection.
@@ -65,8 +69,6 @@ void ConnectServer::run()
     asio::steady_timer    cleanup_callback(io_context_, 15min);
 
     cleanup_callback.async_wait(std::bind(&ConnectServer::periodicCleanup, this, std::placeholders::_1, &cleanup_callback));
-
-    Application::markLoaded();
 
     try
     {
@@ -91,19 +93,23 @@ void ConnectServer::run()
             {
                 // TODO: make a list of "allowed exceptions", the rest can/should cause shutdown.
                 ShowError(fmt::format("Inner fatal: {}", e.what()));
+                return EXIT_FAILURE;
             }
         }
     }
     catch (std::exception& e)
     {
         ShowError(fmt::format("Outer fatal: {}", e.what()));
+        return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
 }
 
-void ConnectServer::loadConsoleCommands()
+void ConnectServer::onConsoleCommandsRegister(ConsoleService* console)
 {
     // clang-format off
-    consoleService_->registerCommand("stats", "Print server runtime statistics",
+    console->registerCommand("stats", "Print server runtime statistics",
     [](std::vector<std::string>& inputs)
     {
         size_t uniqueIPs      = loginHelpers::getAuthenticatedSessions().size();

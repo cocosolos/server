@@ -46,7 +46,8 @@ namespace settings
 
 namespace logging
 {
-    void InitializeLog(std::string const& serverName, std::string const& logFile, bool appendDate);
+    void InitializeConsoleLogger(std::string const& serverName);
+    void AddFileSink(std::string const& logFile, bool appendDate);
     void ShutDown();
 
     void SetPattern(std::string const& str);
