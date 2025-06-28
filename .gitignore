@@ -162,8 +162,7 @@ src/common/stamp-h1
 
 navmeshes/*.nav
 tags
-log/xi.leaks
-log/leaks.txt
+log/*
 
 # Lua Developement Tools project files
 .metadata/**
@@ -237,6 +236,7 @@ doxygen/
 
 # Docker
 *docker-compose*
+!dev.docker-compose.yml
 
 # dSYM folders for Mac OS debugging
 xi_map.dSYM

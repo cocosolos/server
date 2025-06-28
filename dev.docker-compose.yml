@@ -1,0 +1,128 @@
+# Customize with a .env file:
+# DEV_OS=ubuntu # ubuntu or alpine
+# UID=1000 # Use your local UID to avoid permission issues (id -u)
+# GID=1000 # Use your local GID to avoid permission issues (id -g)
+# TAG=testing # This will override the default tag of "testing-$DEV_OS"
+# GIT_REF=origin/base # remote to compare for sanity checks
+# COMPILER=gcc # gcc or clang
+# CMAKE_BUILD_TYPE=Release
+# TRACY_ENABLE=OFF
+# PCH_ENABLE=ON
+
+x-dbcreds: &dbcreds
+  MARIADB_DATABASE: xidb
+  MARIADB_USER: xiadmin
+  MARIADB_PASSWORD: 'password'
+  MARIADB_RANDOM_ROOT_PASSWORD: true
+
+x-common: &common
+  image: landsandboat/server:${TAG:-testing-${DEV_OS:-ubuntu}}
+  pull_policy: never
+  user: "${UID:-1000}:${GID:-1000}"
+  environment:
+    <<: *dbcreds
+    XI_NETWORK_SQL_HOST: database
+    XI_NETWORK_SQL_PORT: 3306
+  volumes:
+    - losmeshes:/server/losmeshes
+    - navmeshes:/server/navmeshes
+    - ./modules:/server/modules
+
+services:
+  database:
+    image: mariadb:lts
+    restart: always
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_general_ci']
+    environment:
+      <<: *dbcreds
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  sanity_checks:
+    image: landsandboat/devtools:${DEV_OS:-ubuntu}
+    pull_policy: never
+    build:
+      dockerfile: docker/${DEV_OS:-ubuntu}.Dockerfile
+      target: devtools
+      context: .
+    user: "${UID:-1000}:${GID:-1000}"
+    command: ["/server/tools/ci/sanity_checks.sh"]
+    environment:
+      GIT_REF: ${GIT_REF:-origin/base}
+    volumes:
+      - ./:/server
+
+  lls:
+    image: landsandboat/devtools:${DEV_OS:-ubuntu}
+    pull_policy: never
+    build:
+      dockerfile: docker/${DEV_OS:-ubuntu}.Dockerfile
+      target: devtools
+      context: .
+    user: "${UID:-1000}:${GID:-1000}"
+    command: ["python", "/server/tools/ci/lua_lang_server.py"]
+    volumes:
+      - ./:/server
+
+  clang_tidy:
+    image: landsandboat/server:clang-tidy-${DEV_OS:-ubuntu}
+    pull_policy: never
+    build:
+      dockerfile: docker/${DEV_OS:-ubuntu}.Dockerfile
+      context: .
+      args:
+        ENABLE_CLANG_TIDY: "ON"
+        COMPILER: "clang"
+        CMAKE_BUILD_TYPE: "${CMAKE_BUILD_TYPE:-Debug}"
+    user: "${UID:-1000}:${GID:-1000}"
+    command: /bin/sh -c "python /server/tools/ci/summarize_tidy.py build.log >> /server/log/clang_tidy_summary.md"
+    volumes:
+      - ./log:/server/log
+
+  build:
+    image: landsandboat/server:${TAG:-testing-${DEV_OS:-ubuntu}}
+    pull_policy: never
+    build:
+      dockerfile: docker/${DEV_OS:-ubuntu}.Dockerfile
+      context: .
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+        COMPILER: "${COMPILER:-gcc}"
+        CMAKE_BUILD_TYPE: "${CMAKE_BUILD_TYPE:-Debug}"
+        TRACY_ENABLE: "${TRACY_ENABLE:-ON}"
+        PCH_ENABLE: "${PCH_ENABLE:-OFF}"
+
+  setup_database:
+    <<: *common
+    command: ["python", "/server/tools/dbtool.py", "update"]
+    volumes:
+      - ./.git:/server/.git
+    depends_on:
+      database:
+        condition: service_healthy
+      build:
+        condition: service_completed_successfully
+
+  startup_checks:
+    <<: *common
+    command: ["python", "-m", "tools.ci.startup_checks"]
+    volumes:
+      - ./log:/server/log
+    depends_on:
+      database:
+        condition: service_healthy
+      build:
+        condition: service_completed_successfully
+      setup_database:
+        condition: service_completed_successfully
+
+volumes:
+  losmeshes:
+    external: true
+  navmeshes:
+    external: true
