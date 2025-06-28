@@ -229,17 +229,11 @@ BRANCH
 
 The `devtools` image contains build and CI tools, but no built executables or server source files. This can be useful for testing or as the base for experimental containers.
 
-### Using devtools for local CI/testing
+## Local CI/Testing
 
-Run sanity checks or LLS by mounting your server directory into the devtools and running the script.
+The [dev.docker-compose.yml](../dev.docker-compose.yml) file contains a template for running the CI tests locally. This file should be copied into an untracked file if edits are needed. Don't forget to run the `build` (or `clang_tidy`) and `setup_database` services before running the `test` or `startup_checks` services if they need to be created/updated.
 
-```
-docker run --rm --user $(id -u):$(id -g) --mount type=bind,src="$(pwd)",dst=/server -e GIT_REF=origin/base ghcr.io/LandSandBoat/devtools:ubuntu /server/tools/ci/sanity_checks.sh
-```
-
-```
-docker run --rm --user $(id -u):$(id -g) --mount type=bind,src="$(pwd)",dst=/server ghcr.io/LandSandBoat/devtools:ubuntu python /server/tools/ci/lua_lang_server.py
-```
+By default there is no database volume, so the database used is ephemeral and is tied to the `database` service container.
 
 ## Alpine
 

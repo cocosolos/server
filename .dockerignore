@@ -236,6 +236,7 @@ doxygen/
 
 # Docker
 *docker-compose*
+!dev.docker-compose.yml
 
 # dSYM folders for Mac OS debugging
 xi_map.dSYM
