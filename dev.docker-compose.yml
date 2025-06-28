@@ -1,0 +1,117 @@
+x-dbcreds: &dbcreds
+  MARIADB_DATABASE: xidb
+  MARIADB_USER: xiadmin
+  MARIADB_PASSWORD: 'password'
+  MARIADB_RANDOM_ROOT_PASSWORD: true
+
+x-common: &common
+  image: landsandboat/server:testing
+  pull_policy: never
+  user: "1000:1000"
+  environment:
+    <<: *dbcreds
+    XI_NETWORK_SQL_HOST: database
+    XI_NETWORK_SQL_PORT: 3306
+  volumes:
+    - losmeshes:/server/losmeshes
+    - navmeshes:/server/navmeshes
+    - ./modules:/server/modules
+
+services:
+  database:
+    image: mariadb:lts
+    restart: always
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_general_ci']
+    environment:
+      <<: *dbcreds
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  sanity_checks:
+    image: landsandboat/devtools:ubuntu
+    pull_policy: never
+    build:
+      dockerfile: docker/ubuntu.Dockerfile
+      target: devtools
+      context: .
+    user: "1000:1000"
+    command: ["/server/tools/ci/sanity_checks.sh"]
+    environment:
+      GIT_REF: origin/base
+    volumes:
+      - ./:/server
+
+  lls:
+    image: landsandboat/devtools:ubuntu
+    pull_policy: never
+    build:
+      dockerfile: docker/ubuntu.Dockerfile
+      target: devtools
+      context: .
+    user: "1000:1000"
+    command: ["python", "/server/tools/ci/lua_lang_server.py"]
+    volumes:
+      - ./:/server
+
+  clang_tidy:
+    image: landsandboat/server:clang-tidy
+    pull_policy: never
+    build:
+      dockerfile: docker/ubuntu.Dockerfile
+      context: .
+      args:
+        ENABLE_CLANG_TIDY: "ON"
+        COMPILER: "clang"
+        CMAKE_BUILD_TYPE: "Debug"
+    user: "1000:1000"
+    command: /bin/sh -c "python /server/tools/ci/summarize_tidy.py build.log >> /server/log/clang_tidy_summary.md"
+    volumes:
+      - ./log:/server/log
+
+  build:
+    image: landsandboat/server:testing
+    pull_policy: never
+    build:
+      dockerfile: docker/ubuntu.Dockerfile
+      context: .
+      args:
+        UID: "1000"
+        GID: "1000"
+        COMPILER: "gcc"
+        CMAKE_BUILD_TYPE: "Debug"
+        TRACY_ENABLE: "ON"
+        PCH_ENABLE: "OFF"
+
+  setup_database:
+    <<: *common
+    command: ["python", "/server/tools/dbtool.py", "update"]
+    volumes:
+      - ./.git:/server/.git
+    depends_on:
+      database:
+        condition: service_healthy
+      build:
+        condition: service_completed_successfully
+
+  startup_checks:
+    <<: *common
+    command: ["python", "-m", "tools.ci.startup_checks"]
+    volumes:
+      - ./log:/server/log
+    depends_on:
+      database:
+        condition: service_healthy
+      build:
+        condition: service_completed_successfully
+      setup_database:
+        condition: service_completed_successfully
+
+volumes:
+  losmeshes:
+    external: true
+  navmeshes:
+    external: true
