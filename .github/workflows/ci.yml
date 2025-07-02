@@ -158,6 +158,7 @@ jobs:
       run:
         shell: bash
     env:
+      artifact_name: LSB_ubuntu_image_${{ github.sha }}
       XI_NETWORK_SQL_HOST: database
       XI_NETWORK_SQL_PORT: 3306
       XI_NETWORK_SQL_DATABASE: xidb
@@ -187,7 +188,7 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: LSB_ubuntu_image_${{ github.sha }}
+          name: ${{ env.artifact_name }}
           path: ${{ runner.temp }}
 
       - name: Start container
@@ -195,7 +196,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.number }}
         run: |
           IMAGE_TO_RUN="ghcr.io/${{ github.repository }}:pr-${PR_NUMBER}"
-          docker load --input ${{ runner.temp }}/ubuntu_image.tar
+          docker load --input ${{ runner.temp }}/${{ env.artifact_name }}.tar
           docker run -dt \
             --name test-server \
             --user root \
@@ -213,6 +214,15 @@ jobs:
       - name: Initialize database
         id: init_db
         run: docker exec test-server /bin/bash -c 'python ./tools/dbtool.py update'
+
+      - name: Run tests (junit)
+        id: xitest
+        timeout-minutes: 10
+        run: |
+          docker exec test-server /bin/bash -c './xi_test --verbose --keep-going --output junit && mv xi_test.xml log/'
+          result=$?
+          echo "xi_test exited with code $result"
+          echo "result=$result" >> $GITHUB_OUTPUT
 
       - name: Run tests
         id: tests
@@ -259,8 +269,23 @@ jobs:
           done
           echo "issues_found=$found_issues" >> $GITHUB_OUTPUT
 
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v5
+        if: ${{ always() }}
+        with:
+          report_paths: 'xi_test.xml'
+          fail_on_failure: true
+          fail_on_parse_error: true
+          require_tests: true
+          include_passed: true
+          check_annotations: true
+          detailed_summary: true
+          include_time_in_summary: true
+          group_suite: true
+          comment: true
+
       - name: Fail Workflow if Checks Failed
-        if: ${{ steps.tests.outcome == 'failure' || steps.summarize_checks.outputs.issues_found == 'true' }}
+        if: ${{ steps.tests.outcome == 'failure' || steps.summarize_checks.outputs.issues_found == 'true' || steps.xitest.outputs.result != 0 }}
         run: |
           echo "Startup checks failed. See summary for details."
           exit 1

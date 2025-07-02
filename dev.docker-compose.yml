@@ -108,6 +108,17 @@ services:
       build:
         condition: service_completed_successfully
 
+  xi_test:
+    <<: *common
+    command: ["/server/xi_test", "--verbose", "--keep-going"]
+    depends_on:
+      database:
+        condition: service_healthy
+      build:
+        condition: service_completed_successfully
+      setup_database:
+        condition: service_completed_successfully
+
   startup_checks:
     <<: *common
     command: ["python", "-m", "tools.ci.startup_checks"]
