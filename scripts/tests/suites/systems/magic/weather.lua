@@ -21,6 +21,7 @@ describe('xi.spells', function()
     end)
 
     after_each(function()
+        rabbit:setHP(0)
         utils.respawnDeadMob(rabbit)
     end)
 
@@ -36,8 +37,7 @@ describe('xi.spells', function()
                 assert.spy(s).returned_with(1) -- 1.0, no bonus
             end)
 
-            -- Disabled because flaky due to day impacting calculations and need one bug fix
-            pending('increases damage with matching weather', function()
+            it('increases damage with matching weather', function()
                 local s = spy.on(xi.spells.damage, 'calculateDayAndWeather')
 
                 player:setMod(xi.mod.FORCE_EARTH_DWBONUS, 1)

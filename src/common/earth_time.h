@@ -36,13 +36,25 @@ namespace earth_time
     // Unix time of the Vana'diel epoch
     static constexpr earth_time::time_point vanadiel_epoch{ 1009810800s };
 
+    inline int64 offset_seconds{ 0 };
+
     // Earth time = UTC
     inline time_point now()
     {
-        return clock::now();
+        return clock::now() + std::chrono::seconds(offset_seconds);
     }
 
-    inline std::tm to_utc_tm(const time_point& tp = clock::now())
+    inline void add_offset_seconds(const int64 seconds)
+    {
+        offset_seconds += seconds;
+    }
+
+    inline void reset_offset_seconds()
+    {
+        offset_seconds = 0;
+    }
+
+    inline std::tm to_utc_tm(const time_point& tp = now())
     {
         std::time_t time_t_val = clock::to_time_t(tp);
         std::tm     utc_tm{};
@@ -50,7 +62,7 @@ namespace earth_time
         return utc_tm;
     }
 
-    inline std::tm to_local_tm(const time_point& tp = clock::now())
+    inline std::tm to_local_tm(const time_point& tp = now())
     {
         std::time_t time_t_val = clock::to_time_t(tp);
         std::tm     local_tm{};

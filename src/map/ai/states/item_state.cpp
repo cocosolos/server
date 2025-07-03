@@ -55,7 +55,7 @@ CItemState::CItemState(CCharEntity* PEntity, uint16 targid, uint8 loc, uint8 slo
             bool found = false;
             for (auto equipslot = 0; equipslot < 18; ++equipslot)
             {
-                if (m_PEntity->getEquip((SLOTTYPE)equipslot) == m_PItem && m_PItem->getCurrentCharges() > 0)
+                if (m_PEntity->getEquip((SLOTTYPE)equipslot) == m_PItem && m_PItem->getCurrentCharges() > 0 && m_PItem->getReuseTime() == 0s)
                 {
                     found = true;
                     break;

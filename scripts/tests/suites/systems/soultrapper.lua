@@ -27,26 +27,27 @@ describe('Soultrapper', function()
     end)
 
     -- Currently broken
-    pending('cant be used before timer reaches 0', function()
+    it('cant be used before timer reaches 0', function()
+        xi.test.world:skipTime(1)
         client:useItem(euvhi, soultrapper:getSlotID())
         xi.test.world:skipTime(1)
-        xi.test.world:tick()
+        xi.test.world:tickEntity(player())
 
         -- If we manage to delete a soul plate before the timer is up, the test fails
         assert.is_false(player:delItem(xi.item.SOUL_PLATE, 1, xi.inv.INVENTORY))
     end)
 
     it('can be used when timer reaches 0', function()
-        xi.test.world:skipTime(31)
+        xi.test.world:skipTime(11)
         client:useItem(euvhi, soultrapper:getSlotID())
         xi.test.world:skipTime(1)
         xi.test.world:tickEntity(player())
         assert.is_true(player:delItem(xi.item.SOUL_PLATE, 1, xi.inv.INVENTORY))
     end)
 
-    pending('cant be reused before cooldown reaches 0', function()
+    it('cant be reused before cooldown reaches 0', function()
         -- Take first picture
-        xi.test.world:skipTime(31)
+        xi.test.world:skipTime(11)
         client:useItem(euvhi, soultrapper:getSlotID())
         xi.test.world:skipTime(1)
         xi.test.world:tickEntity(player())
@@ -61,7 +62,7 @@ describe('Soultrapper', function()
 
     it('can be reused when cooldown reaches 0', function()
         -- Take first picture
-        xi.test.world:skipTime(31)
+        xi.test.world:skipTime(11)
         client:useItem(euvhi, soultrapper:getSlotID())
         xi.test.world:skipTime(1)
         xi.test.world:tickEntity(player())

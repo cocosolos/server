@@ -56,21 +56,9 @@ namespace vanadiel_time
         NIGHT    = 7
     };
 
-    inline int64 offset_seconds{ 0 };
-
     inline time_point now()
     {
-        return clock::now() + std::chrono::seconds(offset_seconds);
-    }
-
-    inline void add_offset_seconds(const int64 seconds)
-    {
-        offset_seconds += seconds;
-    }
-
-    inline void reset_offset_seconds()
-    {
-        offset_seconds = 0;
+        return clock::now();
     }
 
     inline earth_time::time_point to_earth_time(const time_point& vanadiel_tp = now())

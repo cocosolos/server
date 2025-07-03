@@ -127,7 +127,7 @@ void CLuaSimulation::tick(const std::optional<uint32> timeSeconds) const
     {
         ShowDebug("Moving clock offset forward and executing tasks");
         timer::add_offset_seconds(timeSeconds.value());
-        vanadiel_time::add_offset_seconds(timeSeconds.value());
+        earth_time::add_offset_seconds(timeSeconds.value());
         CTaskManager::getInstance()->doExpiredTasks(timer::now());
     }
 
@@ -158,7 +158,7 @@ void CLuaSimulation::addSeconds(uint32 seconds) const
 {
     ShowDebugFmt("Adding {} seconds to clock", seconds);
     timer::add_offset_seconds(seconds);
-    vanadiel_time::add_offset_seconds(seconds);
+    earth_time::add_offset_seconds(seconds);
     ShowDebug("Executing tasks");
     CTaskManager::getInstance()->doExpiredTasks(timer::now());
 }

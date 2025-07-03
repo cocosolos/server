@@ -92,15 +92,15 @@ function SimulationWorld:skipTime(time)
 end
 
 local function getSecondsToVanaTime(vanaHour, vanaMinute)
-    local targetMinuteOfDay = vanaHour * 60 + (vanaMinute or 0)
-    local currentMinuteOfDay = VanadielHour() * 60 + VanadielMinute()
+    local targetSecondsIntoDay = (vanaHour * 60 + (vanaMinute or 0)) * xi.vanaTime.MINUTE
+    local currentSecondsIntoDay = VanadielTime() % xi.vanaTime.DAY
 
-    local vanaMinutesToSkip = targetMinuteOfDay - currentMinuteOfDay
-    if vanaMinutesToSkip < 0 then
-        vanaMinutesToSkip = vanaMinutesToSkip + 24 * 60
+    local secondsToSkip = targetSecondsIntoDay - currentSecondsIntoDay
+    if secondsToSkip < 0 then
+        secondsToSkip = secondsToSkip + xi.vanaTime.DAY
     end
 
-    return vanaMinutesToSkip * 60 / 25
+    return secondsToSkip
 end
 
 --- Skip time until the in-game hour matches the passed in one.
@@ -130,7 +130,8 @@ function SimulationWorld:skipToVanaDay(day)
         string.format('Did not skip to correct day. Expected day %u, got %u.', day, VanadielDayOfTheWeek()))
     assert(VanadielHour() == 1,
         string.format('Did not skip to correct hour of day. Expected hour 1, got %u.', VanadielHour()))
-    -- TODO: Somehow this code is warping us to 1:01 and not 1:00, so the Minute assertion fails.
+    assert(VanadielMinute() == 0,
+        string.format('Did not skip to correct minute of hour. Expected minute 0, got %u.', VanadielMinute()))
 end
 
 function SimulationWorld:setSeed(seed)
