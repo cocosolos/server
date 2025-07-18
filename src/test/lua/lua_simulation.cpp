@@ -81,10 +81,8 @@ auto CLuaSimulation::createPlayerClient(const sol::object& zoneIdObj) -> std::op
     session->server_packet_id = 0;
 
     // Load char
-    auto* PChar = charutils::LoadChar(testChar->getCharId());
-
     testChar->setSession(session);
-    testChar->setEntity(PChar);
+    testChar->setEntity(charutils::LoadChar(testChar->getCharId()));
 
     return *m_clients.emplace_back(std::make_unique<CLuaSimClient>(std::move(testChar), this, m_engine));
 }

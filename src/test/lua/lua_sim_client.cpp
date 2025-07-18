@@ -108,8 +108,6 @@ void CLuaSimClient::sendZonePackets()
 
     // Subset of what recv_parse does when receiving a zone in packet
     ShowDebug("Destroying PChar and reloading");
-    auto* PChar = m_testChar->getEntity();
-    destroy(PChar);
     m_testChar->setEntity(charutils::LoadChar(m_testChar->getCharId()));
     m_testChar->setBlowfish(BLOWFISH_PENDING_ZONE);
 

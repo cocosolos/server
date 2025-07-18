@@ -43,7 +43,7 @@ public:
 
     void setBlowfish(BLOWFISH b) const;
 
-    void setEntity(CCharEntity* entity) const;
+    void setEntity(std::unique_ptr<CCharEntity> entity) const;
     auto getEntity() const -> CCharEntity*;
 
     void setIpp(const IPP ipp)

@@ -185,18 +185,19 @@ auto TestChar::getEntity() const -> CCharEntity*
 {
     if (m_session)
     {
-        return m_session->PChar;
+        return m_session->PChar.get();
     }
 
     return nullptr;
 }
 
-void TestChar::setEntity(CCharEntity* entity) const
+void TestChar::setEntity(std::unique_ptr<CCharEntity> entity) const
 {
     if (m_session)
     {
-        m_session->charID          = entity->id;
-        m_session->PChar           = entity;
+        m_session->PChar.reset();
+        m_session->charID          = entity.get()->id;
+        m_session->PChar           = std::move(entity);
         m_session->PChar->PSession = getSession();
         m_session->PChar->status   = STATUS_TYPE::NORMAL;
     }
