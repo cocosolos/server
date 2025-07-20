@@ -38,6 +38,11 @@ on:
         required: false
         type: boolean
         default: false
+      optional_build:
+        description: 'Skip build if no relevant files changed (requires changed-files artifact).'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   Build:
@@ -49,17 +54,46 @@ jobs:
     env:
       SCCACHE_DIR: ${{ format('{0}/sccache', github.workspace) }}
     steps:
+      - name: Download changed files artifact
+        if: ${{ inputs.optional_build }}
+        uses: actions/download-artifact@v4
+        with:
+          name: changed-files
+        # continue-on-error: true
+
+      - name: Check for changed source files
+        id: check-changes
+        if: ${{ inputs.optional_build }}
+        run: |
+          mapfile -t changed_files < changed-files.txt
+          source_changes=false
+          for changed_file in "${changed_files[@]}"; do
+          if [[ $changed_file == *.cpp || \
+                $changed_file == *.cc  || \
+                $changed_file == *.cxx || \
+                $changed_file == *.h   || \
+                $changed_file == *.hpp || \
+                $changed_file == *.hxx || \
+                $changed_file == CMakeLists.txt || \
+                $changed_file == *.cmake ]]; then
+              cpp_changes=true
+              break
+            fi
+          done
+          echo "source_changes=$source_changes" >> $GITHUB_OUTPUT
+
       - name: Checkout
+        if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Install dependencies (Brew)
-        if: ${{ runner.os == 'macOS' }}
+        if: ${{ runner.os == 'macOS' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: brew install mariadb zeromq zmq luajit
 
       - name: Install dependencies (APT)
-        if: ${{ runner.os == 'Linux' }}
+        if: ${{ runner.os == 'Linux' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
           sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
             binutils-dev \
@@ -76,7 +110,7 @@ jobs:
           echo "CXX=/usr/bin/g++-14" >> $GITHUB_ENV
 
       - name: Install Clang
-        if: ${{ runner.os == 'Linux' && startsWith(inputs.compiler, 'clang') }}
+        if: ${{ runner.os == 'Linux' && startsWith(inputs.compiler, 'clang') && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
           sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
             clang-18 \
@@ -90,23 +124,25 @@ jobs:
           echo "LDFLAGS=-fuse-ld=lld" >> $GITHUB_ENV
 
       - name: Setup MSVC
-        if: ${{ runner.os == 'Windows' }}
+        if: ${{ runner.os == 'Windows' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         uses: TheMrMilchmann/setup-msvc-dev@v3
         with:
           arch: x64
 
       - name: Setup sccache
+        if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         uses: mozilla-actions/sccache-action@v0.0.9
         with:
           disable_annotations: ${{ !inputs.save_cache }}
 
       - name: Setup Python
+        if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Enable modules
-        if: ${{ inputs.build_modules }}
+        if: ${{ inputs.build_modules && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
           python3 <<EOF
           with open("modules/init.txt", "w") as f:
@@ -117,6 +153,7 @@ jobs:
           EOF
 
       - name: Restore build cache
+        if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         id: restore_build
         uses: actions/cache/restore@v4
         env:
@@ -131,6 +168,7 @@ jobs:
             ${{ format('buildcache-{0}-{1}-{2}-{3}-', runner.os, inputs.compiler, inputs.build_type, env.cmake_hash) }}
 
       - name: Configure CMake
+        if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         run: |
           cmake -G Ninja -S . -B build \
             -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
@@ -140,10 +178,11 @@ jobs:
             -DCACHE_OPTION=sccache
 
       - name: Build
+        if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         run: cmake --build build | tee build.log
 
       - name: Summarize Clang Tidy Build
-        if: ${{ inputs.clang_tidy }}
+        if: ${{ inputs.clang_tidy && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
           echo "## Clang Tidy Results" >> $GITHUB_STEP_SUMMARY
           if [[ -f "build.log" && -s "build.log" ]]; then
@@ -151,7 +190,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        if: ${{ inputs.upload_artifact }}
+        if: ${{ inputs.upload_artifact && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ format('LSB_{0}_{1}_{2}', runner.os, inputs.build_type, github.sha) }}
@@ -160,7 +199,7 @@ jobs:
             tracy.tar.gz
 
       - name: Cache build
-        if: ${{ inputs.save_cache && !steps.restore_build.outputs.cache-hit }}
+        if: ${{ inputs.save_cache && !steps.restore_build.outputs.cache-hit && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         uses: actions/cache/save@v4
         with:
           path: |

@@ -170,7 +170,7 @@ def main():
         subprocess.Popen(
             [
                 from_server_path("xi_map"),
-                # "--ci",
+                "--ci",
                 "--log",
                 "log/map-server-(1).log",
                 "--ip",
@@ -203,7 +203,7 @@ def main():
                     subprocess.Popen(
                         [
                             from_server_path("xi_map"),
-                            # "--ci",
+                            "--ci",
                             "--log",
                             "log/map-server-(2).log",
                             "--ip",

@@ -146,6 +146,7 @@ jobs:
       tracy: false
       upload_artifact: false
       clang_tidy: true
+      optional_build: true
 
   Build:
     needs: Sanity_Checks
