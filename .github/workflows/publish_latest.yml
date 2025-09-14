@@ -26,19 +26,19 @@ jobs:
           - build_type: Debug
             runner: windows-2025
             compiler: msvc19
-            tracy: true
+            tracy: false
             build_modules: true
             save_cache: true
           - build_type: Debug
             runner: macos-15
             compiler: appleClang16
-            tracy: true
+            tracy: false
             build_modules: true
             save_cache: true
           - build_type: Debug
             runner: ubuntu-24.04
             compiler: gcc14
-            tracy: true
+            tracy: false
             build_modules: true
             save_cache: true
           - build_type: Debug
