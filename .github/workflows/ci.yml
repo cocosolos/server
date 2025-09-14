@@ -175,20 +175,20 @@ jobs:
   Test:
     needs: Build
     if: ${{ !cancelled() && needs.Build.result == 'success' }}
-    name: ${{ format('Test ({0})', matrix.platform) }}
+    name: ${{ format('Test ({0})', matrix.runner) }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: Windows
+          - runner: windows-2025
             test_modules: false
             multi_process: true
-          - platform: Linux
+          - runner: ubuntu-24.04
             test_modules: false
             multi_process: false
     uses: ./.github/workflows/test.yml
     with:
-      platform: ${{ matrix.platform }}
+      runner: ${{ matrix.runner }}
       test_modules: ${{ matrix.test_modules }}
       multi_process: ${{ matrix.multi_process }}
 
