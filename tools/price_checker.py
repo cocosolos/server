@@ -17,7 +17,7 @@ def process_matches(match, line):
         sliced = line[len(sql_line) :]
 
         # strip the parenthesis, semi-colon, newline chars and comments
-        sliced = sliced.split('--')[0]
+        sliced = sliced.split("--")[0]
         sliced = sliced[2:-3]
 
         split = sliced.split(",")
