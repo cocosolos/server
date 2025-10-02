@@ -43,7 +43,7 @@ services:
     user: "1000:1000"
     command: ["/server/tools/ci/sanity_checks.sh", "origin/base"]
     volumes:
-      - ./:/server
+      - ${LOCAL_WORKSPACE_FOLDER:-./}:/server
 
   lls:
     image: landsandboat/devtools:ubuntu
@@ -55,7 +55,7 @@ services:
     user: "1000:1000"
     command: ["python", "/server/tools/ci/lua_lang_server.py"]
     volumes:
-      - ./:/server
+      - ${LOCAL_WORKSPACE_FOLDER:-./}:/server
 
   clang_tidy:
     <<: *common
@@ -69,7 +69,7 @@ services:
         ENABLE_CLANG_TIDY: "ON"
     command: /bin/sh -c "python /server/tools/ci/summarize_clang_tidy.py build.log > /server/log/clang_tidy_summary.md"
     volumes:
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
 
   build:
     <<: *common
@@ -89,7 +89,7 @@ services:
       XI_NETWORK_SQL_HOST: database
       XI_NETWORK_SQL_PORT: 3306
     volumes:
-      - ./.git:/server/.git
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/.git:/server/.git
     depends_on:
       database:
         condition: service_healthy
@@ -104,7 +104,7 @@ services:
     volumes:
       - losmeshes:/server/losmeshes
       - navmeshes:/server/navmeshes
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
     depends_on:
       database:
         condition: service_healthy
@@ -119,7 +119,7 @@ services:
     volumes:
       - losmeshes:/server/losmeshes
       - navmeshes:/server/navmeshes
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
     depends_on:
       database:
         condition: service_healthy
@@ -138,7 +138,7 @@ services:
       - "54230:54230"
       - "54231:54231"
     volumes:
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
     depends_on:
       database:
         condition: service_healthy
@@ -155,7 +155,7 @@ services:
     ports:
       - "54002:54002"
     volumes:
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
     depends_on:
       database:
         condition: service_healthy
@@ -174,7 +174,7 @@ services:
     ports:
       - "8088:8088"
     volumes:
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
     depends_on:
       database:
         condition: service_healthy
@@ -194,7 +194,7 @@ services:
     volumes:
       - losmeshes:/server/losmeshes
       - navmeshes:/server/navmeshes
-      - ./log:/server/log
+      - ${LOCAL_WORKSPACE_FOLDER:-./}/log:/server/log
     depends_on:
       database:
         condition: service_healthy
