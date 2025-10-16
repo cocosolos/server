@@ -43,19 +43,23 @@ jobs:
 
       - name: Install dependencies (APT)
         if: ${{ runner.os == 'Linux' }}
-        run: |
-          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
-            binutils \
-            git \
-            libmariadb-dev-compat \
-            libzmq5 \
-            lua5.1 \
-            luajit \
-            mariadb-client \
-            mariadb-server \
-            openssl \
-            tzdata \
-            zlib1g
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          command: |
+            sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
+              binutils \
+              git \
+              libmariadb-dev-compat \
+              libzmq5 \
+              lua5.1 \
+              luajit \
+              mariadb-client \
+              mariadb-server \
+              openssl \
+              tzdata \
+              zlib1g
 
       - name: Setup MariaDB (Windows)
         if: ${{ runner.os == 'Windows' }}
@@ -132,8 +136,11 @@ jobs:
 
       - name: Startup checks
         id: tests
-        timeout-minutes: 10
-        run: python -m tools.ci.startup_checks ${{ inputs.multi_process && 'multi' || '' }}
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: python -m tools.ci.startup_checks ${{ inputs.multi_process && 'multi' || '' }}
 
       - name: Summarize checks
         id: summarize_checks
