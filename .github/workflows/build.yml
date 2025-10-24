@@ -52,7 +52,7 @@ jobs:
       run:
         shell: bash
     env:
-      SCCACHE_DIR: ${{ format('{0}/sccache', github.workspace) }}
+      SCCACHE_DIR: ${{ format('{0}/build/sccache', github.workspace) }}
       SCCACHE_CACHE_SIZE: "1G"
     steps:
       - name: Download changed files artifact
@@ -169,9 +169,7 @@ jobs:
           cmake_hash: ${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
           source_hash: ${{ hashFiles('src/**/*', 'ext/**/*') }}
         with:
-          path: |
-            build
-            ${{ env.SCCACHE_DIR }}
+          path: build
           key: ${{ format('buildcache-{0}-{1}-{2}-{3}-{4}', runner.os, inputs.compiler, inputs.build_type, env.cmake_hash, env.source_hash) }}
           restore-keys: |
             ${{ format('buildcache-{0}-{1}-{2}-{3}-', runner.os, inputs.compiler, inputs.build_type, env.cmake_hash) }}
@@ -211,7 +209,5 @@ jobs:
         if: ${{ inputs.save_cache && !steps.restore_build.outputs.cache-hit && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         uses: actions/cache/save@v4
         with:
-          path: |
-            build
-            ${{ env.SCCACHE_DIR }}
+          path: build
           key: ${{ steps.restore_build.outputs.cache-primary-key }}
