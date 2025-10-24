@@ -14,7 +14,7 @@ CHANGED_FILES="${CHANGED_FILES[@]}"
 
 run_check() {
     echo "Running $1..."
-    bash "$1" "${@:2}" >> "$OUTPUT"
+    bash "$1" "${@:2}" | tee -a "$OUTPUT"
     [[ $? -ne 0 ]] && checks_failed=true
 }
 
@@ -27,12 +27,12 @@ if [[ -n "$gitcheck_output" ]]; then
         echo "## :x: Git Checks Failed"
         echo "$gitcheck_output"
         echo
-    } >> "$OUTPUT"
+    } | tee -a "$OUTPUT"
 else
     {
         echo "## :heavy_check_mark: Git Checks Passed"
         echo
-    } >> "$OUTPUT"
+    } | tee -a "$OUTPUT"
 fi
 
 # License Headers
@@ -46,12 +46,12 @@ if [[ -n "$license_headers_output" ]]; then
         echo "$license_headers_output"
         echo '```'
         echo
-    } >> "$OUTPUT"
+    } | tee -a "$OUTPUT"
 else
     {
         echo "## :heavy_check_mark: License Headers Checks Passed"
         echo
-    } >> "$OUTPUT"
+    } | tee -a "$OUTPUT"
 fi
 
 # General
@@ -64,7 +64,7 @@ run_check tools/ci/sanity_checks/python.sh "${CHANGED_FILES[@]}"
 run_check tools/ci/sanity_checks/sql.sh "${CHANGED_FILES[@]}"
 
 # Lua
-python tools/ci/sanity_checks/lua_stylecheck.py test >> "$OUTPUT"
+python tools/ci/sanity_checks/lua_stylecheck.py test | tee -a "$OUTPUT"
 run_check tools/ci/sanity_checks/lua.sh "${CHANGED_FILES[@]}"
 
 # C++
