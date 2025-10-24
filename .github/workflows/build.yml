@@ -53,6 +53,7 @@ jobs:
         shell: bash
     env:
       SCCACHE_DIR: ${{ format('{0}/sccache', github.workspace) }}
+      SCCACHE_CACHE_SIZE: "1G"
     steps:
       - name: Download changed files artifact
         if: ${{ inputs.optional_build }}
