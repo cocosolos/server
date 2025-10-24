@@ -50,7 +50,6 @@ jobs:
         with:
           name: changed-files
           path: changed-files.txt
-          retention-days: 7
         continue-on-error: true
 
   Lua_Language_server:
