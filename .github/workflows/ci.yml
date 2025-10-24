@@ -18,7 +18,7 @@ jobs:
     name: Sanity Checks
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/landsandboat/devtools:ubuntu
+      image: ghcr.io/cocosolos/devtools:ubuntu
     defaults:
       run:
         shell: bash
@@ -57,7 +57,7 @@ jobs:
     needs: Sanity_Checks
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/landsandboat/devtools:ubuntu
+      image: ghcr.io/cocosolos/devtools:ubuntu
     defaults:
       run:
         shell: bash
