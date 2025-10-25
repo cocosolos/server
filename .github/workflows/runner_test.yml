@@ -18,7 +18,7 @@ on:
 
 jobs:
   Test:
-    name: ${{ format('{0}Test ({1})', inputs.multi_process && 'Multi-Process ' || '', inputs.runner) }}
+    name: ${{ format('Test ({0}{1})', inputs.runner, inputs.multi_process && ', multi-process ' || '') }}
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read         # Read repository contents

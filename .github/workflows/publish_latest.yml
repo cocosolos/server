@@ -1,4 +1,4 @@
-name: publish_latest
+name: Builds
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
             save_cache: true
           - build_type: Debug
             runner: macos-15
-            compiler: appleClang16
+            compiler: appleClang17
             tracy: false
             build_modules: false
             save_cache: true
@@ -47,7 +47,7 @@ jobs:
             tracy: false
             build_modules: true
             save_cache: true
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/runner_build.yml
     with:
       runner: ${{ matrix.runner }}
       compiler: ${{ matrix.compiler }}
@@ -64,25 +64,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu
+          - build_type: Release
+            os: ubuntu
             compiler: gcc14
-            build_type: Release
+            tracy: false
+            build_modules: false
             save_cache: false
-          # - os: ubuntu
+          # - build_type: Debug
+          #   os: ubuntu
           #   compiler: gcc14
-          #   build_type: Debug
+          #   tracy: false
+          #   build_modules: false
           #   save_cache: true
-          - os: alpine
+          - build_type: Release
+            os: alpine
             compiler: clang20
-            build_type: Release
+            tracy: false
+            build_modules: false
             save_cache: false
-    uses: ./.github/workflows/build_docker.yml
+    uses: ./.github/workflows/docker_build.yml
     with:
       os: ${{ matrix.os }}
       compiler: ${{ matrix.compiler }}
       build_type: ${{ matrix.build_type }}
       save_cache: ${{ matrix.save_cache }}
-      build_modules: ${{ matrix.build_type == 'Debug' }}
-      tracy: ${{ matrix.build_type == 'Debug' }}
+      build_modules: ${{ matrix.build_modules }}
+      tracy: ${{ matrix.tracy }}
       upload_artifact: false
       publish: ${{ matrix.build_type == 'Release' }}
