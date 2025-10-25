@@ -90,6 +90,12 @@ jobs:
         if: ${{ runner.os == 'macOS' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: brew install mariadb zeromq zmq luajit
 
+      - name: Use homebrew clang
+        if: ${{ runner.os == 'macOS' && startsWith(inputs.compiler, 'clang') && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
+        run: |
+            echo "CC=$(brew --prefix llvm@20)/bin/clang" >> $GITHUB_ENV
+            echo "CXX=$(brew --prefix llvm@20)/bin/clang++" >> $GITHUB_ENV
+
       - name: Install dependencies (APT)
         if: ${{ runner.os == 'Linux' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |

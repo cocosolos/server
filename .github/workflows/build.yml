@@ -30,7 +30,7 @@ jobs:
             build_modules: false
             save_cache: true
           - build_type: Debug
-            runner: macos-15
+            runner: macos-26
             compiler: appleClang17
             tracy: false
             build_modules: false

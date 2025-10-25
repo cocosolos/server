@@ -154,7 +154,7 @@ jobs:
             compiler: msvc19
             build_modules: false
           - build_type: Debug
-            runner: macos-15
+            runner: macos-26
             compiler: appleClang17
             build_modules: false
           - build_type: Debug
