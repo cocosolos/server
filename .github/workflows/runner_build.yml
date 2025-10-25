@@ -60,7 +60,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: changed-files
-        # continue-on-error: true
 
       - name: Check for changed source files
         id: check-changes

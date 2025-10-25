@@ -78,7 +78,6 @@ jobs:
         id: setup_buildx
 
       - name: Restore build cache
-        id: restore_build_cache
         if: ${{ !inputs.save_cache }}
         uses: actions/cache/restore@v4
         env:
@@ -166,7 +165,7 @@ jobs:
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           annotations: ${{ steps.docker-meta.outputs.annotations }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          platforms: linux/amd64${{ inputs.publish && ',linux/arm64,linux/arm/v7' || '' }}
           build-args: |
             COMPILER=${{ inputs.compiler }}
             CMAKE_BUILD_TYPE=${{ inputs.build_type }}

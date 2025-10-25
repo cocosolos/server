@@ -5,6 +5,11 @@ on:
         description: 'Linux/Windows platform to test.'
         required: true
         type: string
+      build_type:
+        description: 'CMake build type.'
+        required: false
+        type: string
+        default: 'Debug'
       test_modules:
         description: 'Test with modules enabled.'
         required: false
@@ -88,12 +93,13 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ format('LSB_{0}_Debug_{1}', runner.os, github.sha) }}
+          name: ${{ format('LSB_{0}_{1}_{2}', runner.os, inputs.build_type, github.sha) }}
           path: .
 
       - name: Prepare executables
         run: |
           mv xi_map_tracy xi_map 2> /dev/null || true
+          mv xi_test_tracy xi_test 2> /dev/null || true
           chmod +x xi_*
 
       - name: Enable modules
@@ -125,7 +131,7 @@ jobs:
           summary: true
           pull-request: false
           status-check: true
-          status-check-name: 'xi_test (${{ runner.os }})'
+          status-check-name: 'xi_test (${{ inputs.runner }})'
           annotate: true
           upload-artifact: true
           artifact-name: 'xi_test-ctrf-${{ runner.os }}'

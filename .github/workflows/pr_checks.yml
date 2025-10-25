@@ -1,4 +1,4 @@
-name: ci
+name: PR Checks
 
 on:
   pull_request:
@@ -22,8 +22,6 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      GIT_REF: origin/${{ github.event.pull_request.base.ref }}
     steps:
       # github.workspace is the workspace in the runner (/home/runner/work/server/server)
       # $GITHUB_WORKSPACE is the workspace in the container (/__w/server/server)
@@ -39,10 +37,10 @@ jobs:
           python -m pip install --upgrade -r ./tools/requirements.txt
 
       - name: Run checks
-        run: ./tools/ci/sanity_checks.sh origin/base
+        run: ./tools/ci/sanity_checks.sh origin/${{ github.event.pull_request.base.ref }}
 
       - name: Add sanity checks report to summary
-        if: always()
+        if: ${{ always() }}
         run: tr -d '\r' < sanity_checks_summary.md >> $GITHUB_STEP_SUMMARY
 
       - name: Upload changed files as artifact
@@ -133,12 +131,11 @@ jobs:
   Clang_Tidy:
     needs: Sanity_Checks
     name: Clang Tidy
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/runner_build.yml
     with:
       runner: ubuntu-24.04
       compiler: clang18
       build_type: Debug
-      save_cache: false
       build_modules: true
       tracy: false
       upload_artifact: false
@@ -152,22 +149,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: windows-2025
+          - build_type: Debug
+            runner: windows-2025
             compiler: msvc19
-          - runner: macos-15
-            compiler: appleClang16
-          - runner: ubuntu-24.04
+            build_modules: false
+          - build_type: Debug
+            runner: macos-15
+            compiler: appleClang17
+            build_modules: false
+          - build_type: Debug
+            runner: ubuntu-24.04
             compiler: gcc14
-    uses: ./.github/workflows/build.yml
+            build_modules: false
+    uses: ./.github/workflows/runner_build.yml
     with:
       runner: ${{ matrix.runner }}
       compiler: ${{ matrix.compiler }}
-      build_type: Debug
-      save_cache: false
-      build_modules: false
-      tracy: false
+      build_type: ${{ matrix.build_type }}
+      build_modules: ${{ matrix.build_modules }}
       upload_artifact: true
-      clang_tidy: false
 
   Test:
     needs: Build
@@ -183,25 +183,23 @@ jobs:
           - runner: ubuntu-24.04
             test_modules: false
             multi_process: false
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/runner_test.yml
     with:
       runner: ${{ matrix.runner }}
       test_modules: ${{ matrix.test_modules }}
       multi_process: ${{ matrix.multi_process }}
 
-  # Docker:
+  # Docker_Build:
   #   needs: Sanity_Checks
-  #   name: Docker Build (ubuntu)
-  #   uses: ./.github/workflows/build_docker.yml
+  #   name: Build
+  #   uses: ./.github/workflows/docker_build.yml
   #   with:
   #     os: ubuntu
   #     compiler: gcc14
   #     build_type: Debug
-  #     save_cache: false
-  #     build_modules: true
-  #     tracy: true
+  #     build_modules: false
+  #     tracy: false
   #     upload_artifact: true
-  #     publish: false
 
   # Test_Linux:
   #   name: Testing (Linux)

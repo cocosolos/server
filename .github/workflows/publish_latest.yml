@@ -1,4 +1,4 @@
-name: publish_latest
+name: Builds
 
 on:
   push:
@@ -20,34 +20,44 @@ jobs:
           - build_type: Release
             runner: windows-2025
             compiler: msvc19
-            tracy: true
+            tracy: false
             build_modules: false
             save_cache: false
+            upload_artifact: true
+            clang_tidy: false
           - build_type: Debug
             runner: windows-2025
             compiler: msvc19
             tracy: false
             build_modules: false
             save_cache: true
+            upload_artifact: false
+            clang_tidy: false
           - build_type: Debug
             runner: macos-15
-            compiler: appleClang16
+            compiler: appleClang17
             tracy: false
             build_modules: false
             save_cache: true
+            upload_artifact: false
+            clang_tidy: false
           - build_type: Debug
             runner: ubuntu-24.04
             compiler: gcc14
             tracy: false
             build_modules: false
             save_cache: true
+            upload_artifact: false
+            clang_tidy: false
           - build_type: Debug
             runner: ubuntu-24.04
             compiler: clang18
             tracy: false
             build_modules: true
             save_cache: true
-    uses: ./.github/workflows/build.yml
+            upload_artifact: false
+            clang_tidy: true
+    uses: ./.github/workflows/runner_build.yml
     with:
       runner: ${{ matrix.runner }}
       compiler: ${{ matrix.compiler }}
@@ -55,8 +65,8 @@ jobs:
       build_modules: ${{ matrix.build_modules }}
       tracy: ${{ matrix.tracy }}
       save_cache: ${{ matrix.save_cache }}
-      upload_artifact: ${{ matrix.build_type == 'Release' }}
-      clang_tidy: ${{ startsWith(matrix.runner, 'ubuntu') && startsWith(matrix.compiler, 'clang') }}
+      upload_artifact: ${{ matrix.upload_artifact }}
+      clang_tidy: ${{ matrix.clang_tidy }}
 
   Docker:
     name: ${{ matrix.save_cache && 'Cache Build' || 'Build' }}
@@ -64,25 +74,34 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu
+          - build_type: Release
+            os: ubuntu
             compiler: gcc14
-            build_type: Release
+            tracy: false
+            build_modules: false
             save_cache: false
-          # - os: ubuntu
+            publish: true
+          # - build_type: Debug
+          #   os: ubuntu
           #   compiler: gcc14
-          #   build_type: Debug
+          #   tracy: false
+          #   build_modules: false
           #   save_cache: true
-          - os: alpine
+          #   publish: false
+          - build_type: Release
+            os: alpine
             compiler: clang20
-            build_type: Release
+            tracy: false
+            build_modules: false
             save_cache: false
-    uses: ./.github/workflows/build_docker.yml
+            publish: true
+    uses: ./.github/workflows/docker_build.yml
     with:
       os: ${{ matrix.os }}
       compiler: ${{ matrix.compiler }}
       build_type: ${{ matrix.build_type }}
       save_cache: ${{ matrix.save_cache }}
-      build_modules: ${{ matrix.build_type == 'Debug' }}
-      tracy: ${{ matrix.build_type == 'Debug' }}
+      build_modules: ${{ matrix.build_modules }}
+      tracy: ${{ matrix.tracy }}
       upload_artifact: false
-      publish: ${{ matrix.build_type == 'Release' }}
+      publish: ${{ matrix.publish }}
