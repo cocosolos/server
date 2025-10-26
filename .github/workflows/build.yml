@@ -20,7 +20,7 @@ jobs:
           - build_type: Release
             runner: windows-2025
             compiler: msvc19
-            tracy: true
+            tracy: false
             build_modules: false
             save_cache: false
           - build_type: Debug
