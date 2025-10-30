@@ -1,3 +1,5 @@
+name: Reusable Docker Build Workflow
+
 on:
   workflow_call:
     inputs:
@@ -41,7 +43,7 @@ on:
 
 jobs:
   Docker_Build:
-    name: ${{ format('Docker Build ({0}, {1}, {2})', inputs.os, inputs.compiler, inputs.build_type) }}
+    name: ${{ format('docker-{0}, {1}, {2}', inputs.os, inputs.compiler, inputs.build_type) }}
     runs-on: ubuntu-latest
     env:
       BUILDX_NO_DEFAULT_ATTESTATIONS: 1 # https://github.com/orgs/community/discussions/45969

@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Build:
+  Runner_Build:
     name: ${{ matrix.save_cache && 'Cache Build' || 'Build' }}
     strategy:
       fail-fast: false
@@ -68,7 +68,7 @@ jobs:
       upload_artifact: ${{ matrix.upload_artifact }}
       clang_tidy: ${{ matrix.clang_tidy }}
 
-  Docker:
+  Docker_Build:
     name: ${{ matrix.save_cache && 'Cache Build' || 'Build' }}
     strategy:
       fail-fast: false

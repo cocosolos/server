@@ -1,3 +1,5 @@
+name: Reusable Runner Test Workflow
+
 on:
   workflow_call:
     inputs:
@@ -22,8 +24,8 @@ on:
         default: false
 
 jobs:
-  Test:
-    name: ${{ format('{0}Test ({1})', inputs.multi_process && 'Multi-Process ' || '', inputs.runner) }}
+  Runner_Test:
+    name: ${{ format('{0}', inputs.runner) }}
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read         # Read repository contents
@@ -46,7 +48,7 @@ jobs:
           fetch-depth: 1
           submodules: recursive # For navmeshes
 
-      - name: Install dependencies (APT)
+      - name: Install dependencies (Linux)
         if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \

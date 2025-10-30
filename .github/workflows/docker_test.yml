@@ -1,3 +1,5 @@
+name: Reusable Docker Test Workflow
+
 on:
   workflow_call:
     inputs:

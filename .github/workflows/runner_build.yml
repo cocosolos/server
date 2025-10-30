@@ -1,3 +1,5 @@
+name: Reusable Runner Build Workflow
+
 on:
   workflow_call:
     inputs:
@@ -45,8 +47,8 @@ on:
         default: false
 
 jobs:
-  Build:
-    name: ${{ format('{0} ({1}, {2}, {3})', inputs.clang_tidy && 'Clang Tidy' || 'Build', inputs.runner, inputs.compiler, inputs.build_type) }}
+  Runner_Build:
+    name: ${{ format('{0}, {1}, {2}', inputs.runner, inputs.compiler, inputs.build_type) }}
     runs-on: ${{ inputs.runner }}
     defaults:
       run:
@@ -85,11 +87,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install dependencies (Brew)
+      - name: Install dependencies (macOS)
         if: ${{ runner.os == 'macOS' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: brew install mariadb zeromq zmq luajit
 
-      - name: Install dependencies (APT)
+      - name: Install dependencies (Linux)
         if: ${{ runner.os == 'Linux' && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
           sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
@@ -106,7 +108,7 @@ jobs:
           echo "CC=/usr/bin/gcc-14" >> $GITHUB_ENV
           echo "CXX=/usr/bin/g++-14" >> $GITHUB_ENV
 
-      - name: Install Clang
+      - name: Install Clang (Linux)
         if: ${{ runner.os == 'Linux' && startsWith(inputs.compiler, 'clang') && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
           sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \

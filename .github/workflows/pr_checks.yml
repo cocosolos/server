@@ -50,7 +50,7 @@ jobs:
           path: changed-files.txt
         continue-on-error: true
 
-  Lua_Language_server:
+  Lua_Language_Server:
     name: Lua Language Server
     needs: Sanity_Checks
     runs-on: ubuntu-latest
@@ -144,7 +144,7 @@ jobs:
 
   Build:
     needs: Sanity_Checks
-    name: ${{ format('Build ({0})', matrix.runner) }}
+    name: ${{ matrix.runner && 'Build' || '' }} # GitHub Actions hack to hide matrix args
     strategy:
       fail-fast: false
       matrix:
@@ -172,7 +172,7 @@ jobs:
   Test:
     needs: Build
     if: ${{ !cancelled() && needs.Build.result == 'success' }}
-    name: ${{ format('Test ({0})', matrix.runner) }}
+    name: ${{ matrix.runner && 'Test' || '' }} # GitHub Actions hack to hide matrix args
     strategy:
       fail-fast: false
       matrix:
