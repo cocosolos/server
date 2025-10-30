@@ -18,7 +18,7 @@ on:
 
 jobs:
   Docker_Test:
-    name: ${{ format('Test (docker-{0}{1})', inputs.os, inputs.multi_process && ', multi-process ' || '') }}
+    name: ${{ format('{0}{1}', github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'latest', inputs.os == 'alpine' && '-alpine' || '') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -118,10 +118,10 @@ jobs:
           summary: true
           pull-request: false
           status-check: true
-          status-check-name: 'xi_test (${{ inputs.os }})'
+          status-check-name: "xi_test (${{ format('{0}{1}', github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'latest', inputs.os == 'alpine' && '-alpine' || '') }})"
           annotate: true
           upload-artifact: true
-          artifact-name: 'xi_test-ctrf-${{ inputs.os }}'
+          artifact-name: "xi_test-ctrf-${{ format('{0}{1}', github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'latest', inputs.os == 'alpine' && '-alpine' || '') }}"
 
       - name: Startup checks
         id: startup_checks
@@ -167,6 +167,11 @@ jobs:
               fi
           done
           echo "issues_found=$found_issues" >> $GITHUB_OUTPUT
+
+      - name: Stop container
+        run: |
+          docker stop test-server
+          docker rm test-server
 
       - name: Fail Workflow if Checks Failed
         if: ${{ steps.xi_test.outcome == 'failure' || steps.startup_checks.outcome == 'failure' || steps.summarize_checks.outputs.issues_found == 'true' }}

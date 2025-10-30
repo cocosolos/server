@@ -23,7 +23,7 @@ on:
 
 jobs:
   Test:
-    name: ${{ format('Test ({0}{1})', inputs.runner, inputs.multi_process && ', multi-process ' || '') }}
+    name: ${{ format('{0}', inputs.runner) }}
     runs-on: ${{ inputs.runner }}
     permissions:
       contents: read         # Read repository contents
@@ -139,7 +139,7 @@ jobs:
           summary: true
           pull-request: false
           status-check: true
-          status-check-name: 'xi_test (${{ runner.os }})'
+          status-check-name: 'xi_test (${{ inputs.runner }})'
           annotate: true
           upload-artifact: true
           artifact-name: 'xi_test-ctrf-${{ runner.os }}'

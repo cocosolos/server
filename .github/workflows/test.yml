@@ -85,7 +85,7 @@ jobs:
           exit 1
 
   Test_Windows:
-    name: Test (Windows)
+    name: Test
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/runner_test.yml
     with:
@@ -95,7 +95,7 @@ jobs:
       multi_process: true
 
   Test_Latest:
-    name: Test (Docker)
+    name: Test
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/docker_test.yml
     with:

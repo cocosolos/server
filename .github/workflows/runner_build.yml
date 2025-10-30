@@ -46,7 +46,7 @@ on:
 
 jobs:
   Build:
-    name: ${{ format('{0} ({1}, {2}, {3})', inputs.clang_tidy && 'Clang Tidy' || 'Build', inputs.runner, inputs.compiler, inputs.build_type) }}
+    name: ${{ format('{0}, {1}, {2}{3}', inputs.runner, inputs.compiler, inputs.build_type, inputs.clang_tidy && ', Clang Tidy' || '') }}
     runs-on: ${{ inputs.runner }}
     defaults:
       run:

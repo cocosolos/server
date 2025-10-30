@@ -203,7 +203,7 @@ jobs:
 
   # Docker_Test:
   #   needs: Docker_Build
-  #   name: Test (docker, ubuntu)
+  #   name: Test
   #   uses: ./.github/workflows/docker_test.yml
   #   with:
   #     os: ubuntu
