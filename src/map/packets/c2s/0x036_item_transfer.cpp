@@ -35,10 +35,10 @@ namespace
     {
         if (settings::get<bool>("map.AUDIT_PLAYER_TRADES"))
         {
-            const auto sender       = PChar->id;
-            const auto senderName   = PChar->getName();
-            const auto receiver     = PNpc->id;
-            const auto receiverName = PNpc->getName();
+            const auto  sender       = PChar->id;
+            const auto& senderName   = PChar->getName();
+            const auto  receiver     = PNpc->id;
+            const auto& receiverName = PNpc->getName();
 
             // clang-format off
             Async::getInstance()->submit([itemId, quantity, sender, senderName, receiver, receiverName]()

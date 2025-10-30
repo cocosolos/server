@@ -240,8 +240,8 @@ namespace moduleutils
                         // we need to sanity check them here by checking the name and port against the database.
                         if (parts.size() >= 3 && parts[0] == "xi" && parts[1] == "zones")
                         {
-                            const auto zoneName    = parts[2];
-                            const auto currentPort = mapIPP.getPort() == 0 ? settings::get<uint16>("network.MAP_PORT") : mapIPP.getPort();
+                            const auto& zoneName    = parts[2];
+                            const auto  currentPort = mapIPP.getPort() == 0 ? settings::get<uint16>("network.MAP_PORT") : mapIPP.getPort();
 
                             if (zoneSettingsPorts.find(zoneName) != zoneSettingsPorts.end() && zoneSettingsPorts[zoneName] != currentPort)
                             {

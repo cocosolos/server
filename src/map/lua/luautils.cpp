@@ -967,15 +967,15 @@ namespace luautils
                     return;
                 }
 
-                const auto zoneName = PEntity->loc.zone->getName();
-                const auto name     = PEntity->getName();
+                const auto  zoneName = PEntity->loc.zone->getName();
+                const auto& name     = PEntity->getName();
                 CacheLuaObjectFromFile(fmt::format("./scripts/zones/{}/npcs/{}.lua", zoneName, name));
             }
             break;
             case TYPE_MOB:
             {
-                const auto zoneName = PEntity->loc.zone->getName();
-                const auto name     = PEntity->getName();
+                const auto  zoneName = PEntity->loc.zone->getName();
+                const auto& name     = PEntity->getName();
                 CacheLuaObjectFromFile(fmt::format("./scripts/zones/{}/mobs/{}.lua", zoneName, name));
             }
             break;
@@ -5714,7 +5714,7 @@ namespace luautils
         {
             return sol::lua_nil;
         }
-        const auto result = *maybeResult;
+        const auto& result = *maybeResult;
 
         sol::table table = lua.create_table();
 
@@ -5786,7 +5786,7 @@ namespace luautils
         {
             return sol::lua_nil;
         }
-        const auto result = *maybeResult;
+        const auto& result = *maybeResult;
 
         sol::table table = lua.create_table();
 

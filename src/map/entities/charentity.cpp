@@ -1130,7 +1130,7 @@ void CCharEntity::PostTick()
         }
 
         sendServerStatus_ = false;
-        updatemask = 0;
+        updatemask        = 0;
     }
 }
 
@@ -3253,8 +3253,8 @@ void CCharEntity::tryStartNextEvent()
 
     if (eventQueue.empty())
     {
-        updatemask |= UPDATE_POS; // TODO: decouple from this. We want the 250ms post-tick processing.
-        animation = ANIMATION_NONE; // sendServerStatus_ is somewhat like an update mask on its own
+        updatemask |= UPDATE_POS;           // TODO: decouple from this. We want the 250ms post-tick processing.
+        animation         = ANIMATION_NONE; // sendServerStatus_ is somewhat like an update mask on its own
         sendServerStatus_ = true;
         return;
     }
