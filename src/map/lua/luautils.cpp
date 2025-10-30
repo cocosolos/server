@@ -970,15 +970,15 @@ void OnEntityLoad(CBaseEntity* PEntity)
                 return;
             }
 
-            const auto zoneName = PEntity->loc.zone->getName();
-            const auto name     = PEntity->getName();
+            const auto  zoneName = PEntity->loc.zone->getName();
+            const auto& name     = PEntity->getName();
             CacheLuaObjectFromFile(fmt::format("./scripts/zones/{}/npcs/{}.lua", zoneName, name));
         }
         break;
         case TYPE_MOB:
         {
-            const auto zoneName = PEntity->loc.zone->getName();
-            const auto name     = PEntity->getName();
+            const auto  zoneName = PEntity->loc.zone->getName();
+            const auto& name     = PEntity->getName();
             CacheLuaObjectFromFile(fmt::format("./scripts/zones/{}/mobs/{}.lua", zoneName, name));
         }
         break;
@@ -5728,7 +5728,7 @@ auto GetSynergyRecipeByID(uint32 id) -> sol::table
     {
         return sol::lua_nil;
     }
-    const auto result = *maybeResult;
+    const auto& result = *maybeResult;
 
     sol::table table = lua.create_table();
 
@@ -5799,7 +5799,7 @@ auto GetSynergyRecipeByTrade(CLuaTradeContainer luaTradeContainer) -> sol::table
     {
         return sol::lua_nil;
     }
-    const auto result = *maybeResult;
+    const auto& result = *maybeResult;
 
     sol::table table = lua.create_table();
 

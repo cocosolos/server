@@ -65,9 +65,9 @@ const auto auditUnity = [](CCharEntity* PChar, const std::string& rawMessage)
 {
     if (settings::get<bool>("map.AUDIT_CHAT") && settings::get<uint8>("map.AUDIT_UNITY"))
     {
-        const auto name        = PChar->getName();
-        const auto zoneId      = PChar->getZone();
-        const auto unityLeader = PChar->PUnityChat->getLeader();
+        const auto& name        = PChar->getName();
+        const auto  zoneId      = PChar->getZone();
+        const auto  unityLeader = PChar->PUnityChat->getLeader();
 
         // clang-format off
             Async::getInstance()->submit([name, zoneId, unityLeader, rawMessage]()
