@@ -4,7 +4,7 @@ set -uo pipefail
 checks_failed=false
 
 OUTPUT="sanity_checks_summary.md"
-echo "# Sanity Check Results" > "$OUTPUT"
+rm -f "$OUTPUT"
 
 run_check() {
     echo "Running $1..."
@@ -29,11 +29,6 @@ if [[ $# -gt 0 ]]; then
             echo "$gitcheck_output"
             echo
         } | tee -a "$OUTPUT"
-    else
-        {
-            echo "## :heavy_check_mark: Git Checks Passed"
-            echo
-        } | tee -a "$OUTPUT"
     fi
 fi
 
@@ -54,9 +49,8 @@ run_check tools/ci/sanity_checks/lua.sh "${CHANGED_FILES[@]}"
 run_check tools/ci/sanity_checks/cpp.sh "${CHANGED_FILES[@]}"
 
 if [[ "$checks_failed" == "true" ]]; then
-    echo "One or more checks failed."
     exit 1
 else
-    echo "All checks passed."
+    echo "## :heavy_check_mark: All sanity checks passed" | tee -a "$OUTPUT"
     exit 0
 fi
