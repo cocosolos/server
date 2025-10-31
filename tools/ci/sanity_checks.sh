@@ -18,7 +18,6 @@ if [[ $# -gt 0 ]]; then
     git diff --name-status "$GIT_REF.."
     git diff --name-only "$GIT_REF.." > changed-files.txt
     readarray -t CHANGED_FILES < changed-files.txt
-    CHANGED_FILES="${CHANGED_FILES[@]}"
 
     # Git
     echo "Checking commit formatting..."
