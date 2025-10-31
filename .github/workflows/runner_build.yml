@@ -62,6 +62,10 @@ jobs:
           name: changed-files
         # continue-on-error: true
 
+      - name: Install homebrew bash
+        if: ${{ runner.os == 'macOS' }}
+        run: brew install bash
+
       - name: Check for changed source files
         id: check-changes
         if: ${{ inputs.optional_build }}
@@ -93,6 +97,7 @@ jobs:
       - name: Use homebrew clang
         if: ${{ runner.os == 'macOS' && startsWith(inputs.compiler, 'clang') && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         run: |
+            echo "PATH=$(brew --prefix llvm@20)/bin:$PATH" >> $GITHUB_ENV
             echo "CC=$(brew --prefix llvm@20)/bin/clang" >> $GITHUB_ENV
             echo "CXX=$(brew --prefix llvm@20)/bin/clang++" >> $GITHUB_ENV
 

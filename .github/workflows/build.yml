@@ -35,12 +35,12 @@ jobs:
             clang_tidy: false
           - build_type: Debug
             runner: macos-26
-            compiler: appleClang17
+            compiler: clang20
             tracy: false
-            build_modules: false
+            build_modules: true
             save_cache: true
             upload_artifact: false
-            clang_tidy: false
+            clang_tidy: true
           - build_type: Debug
             runner: ubuntu-24.04
             compiler: gcc14
@@ -49,14 +49,14 @@ jobs:
             save_cache: true
             upload_artifact: false
             clang_tidy: false
-          - build_type: Debug
-            runner: ubuntu-24.04
-            compiler: clang18
-            tracy: false
-            build_modules: true
-            save_cache: true
-            upload_artifact: false
-            clang_tidy: true
+          # - build_type: Debug
+          #   runner: ubuntu-24.04
+          #   compiler: clang18
+          #   tracy: false
+          #   build_modules: true
+          #   save_cache: true
+          #   upload_artifact: false
+          #   clang_tidy: true
     uses: ./.github/workflows/runner_build.yml
     with:
       runner: ${{ matrix.runner }}

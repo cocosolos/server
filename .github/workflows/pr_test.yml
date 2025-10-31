@@ -133,8 +133,8 @@ jobs:
     name: Build
     uses: ./.github/workflows/runner_build.yml
     with:
-      runner: ubuntu-24.04
-      compiler: clang18
+      runner: macos-26
+      compiler: clang20
       build_type: Debug
       build_modules: true
       tracy: false
@@ -153,10 +153,10 @@ jobs:
             runner: windows-2025
             compiler: msvc19
             build_modules: false
-          - build_type: Debug
-            runner: macos-26
-            compiler: appleClang17
-            build_modules: false
+          # - build_type: Debug
+          #   runner: macos-26
+          #   compiler: clang20
+          #   build_modules: false
           - build_type: Debug
             runner: ubuntu-24.04
             compiler: gcc14
