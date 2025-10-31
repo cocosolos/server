@@ -150,14 +150,14 @@ jobs:
               fi
           done
           if [[ "$found_issues" == "false" ]]; then
-              if [[ "${{ steps.startup_checks.outcome }}" == "success" ]]; then
-                  echo "### :heavy_check_mark: Startup checks passed." >> $GITHUB_STEP_SUMMARY
-              else
+              if [[ "${{ steps.startup_checks.outcome }}" != "success" ]]; then
                   echo "### :x: Startup checks failed, but no specific errors were found." >> $GITHUB_STEP_SUMMARY
                   echo "Check the logs for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
               fi
           fi
+          echo "<details><summary><h4>View Logs</h4></summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           for log_file in ./*.log; do
               if [[ -f "$log_file" && -s "$log_file" ]]; then
                   log_name=$(basename "$log_file" .log | sed 's/.*/\u&/; s/-\(.\)/ \u\1/g')
@@ -165,9 +165,9 @@ jobs:
                   echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
                   cat "$log_file" >> $GITHUB_STEP_SUMMARY
                   echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
               fi
           done
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
           echo "issues_found=$found_issues" >> $GITHUB_OUTPUT
 
       - name: Stop container

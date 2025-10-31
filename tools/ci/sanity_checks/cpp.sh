@@ -83,9 +83,4 @@ if [[ -n "$git_diff_output" ]]; then
     echo
 fi
 
-if ! $any_issues; then
-    echo "## :heavy_check_mark: C++ Checks Passed"
-    echo
-fi
-
 $any_issues && exit 1 || exit 0

@@ -100,12 +100,11 @@ jobs:
         id: summarize_run
         if: ${{ steps.check-changes.outputs.lua_changes == 'true' }}
         run: |
-          echo "## Lua Language Server Results" >> $GITHUB_STEP_SUMMARY
           found_issues=false
           check_file=lua_lang_errors.txt
           if [[ -f "$check_file" && -s "$check_file" ]]; then
               found_issues=true
-              echo "### :x: Run Failed" >> $GITHUB_STEP_SUMMARY
+              echo "## :x: Run Failed" >> $GITHUB_STEP_SUMMARY
               echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
               tr -d '\r' < "$check_file" >> $GITHUB_STEP_SUMMARY
               echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -113,9 +112,9 @@ jobs:
           fi
           if [[ "$found_issues" == "false" ]]; then
               if [[ "${{ steps.run_lls.outcome }}" == "success" ]]; then
-                  echo "### :heavy_check_mark: All checks passed." >> $GITHUB_STEP_SUMMARY
+                  echo "## :heavy_check_mark: All checks passed." >> $GITHUB_STEP_SUMMARY
               else
-                  echo "### :x: Lua Language Server had errors, but no specific output was found." >> $GITHUB_STEP_SUMMARY
+                  echo "## :x: Lua Language Server had errors, but no specific output was found." >> $GITHUB_STEP_SUMMARY
                   echo "Check the logs step for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
               fi
