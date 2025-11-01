@@ -159,8 +159,7 @@ jobs:
           for log_file in ./*.log; do
               if [[ -f "$log_file" && -s "$log_file" ]]; then
                   log_name=$(basename "$log_file" .log | sed 's/.*/\u&/; s/-\(.\)/ \u\1/g')
-                  echo "### :sailboat: ${log_name}" >> $GITHUB_STEP_SUMMARY
-                  echo "<details><summary>View Logs</summary>" >> $GITHUB_STEP_SUMMARY
+                  echo "<details><summary><h3>${log_name}</h3></summary>" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
                   cat "$log_file" >> $GITHUB_STEP_SUMMARY
