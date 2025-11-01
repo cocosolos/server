@@ -148,9 +148,7 @@ jobs:
               fi
           done
           if [[ "$found_issues" == "false" ]]; then
-              if [[ "${{ steps.startup_checks.outcome }}" == "success" ]]; then
-                  echo "### :heavy_check_mark: Startup checks passed." >> $GITHUB_STEP_SUMMARY
-              else
+              if [[ "${{ steps.startup_checks.outcome }}" != "success" ]]; then
                   echo "### :x: Startup checks failed, but no specific errors were found." >> $GITHUB_STEP_SUMMARY
                   echo "Check the logs for details." >> $GITHUB_STEP_SUMMARY
                   found_issues=true
@@ -165,7 +163,6 @@ jobs:
                   cat "$log_file" >> $GITHUB_STEP_SUMMARY
                   echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
                   echo "</details>" >> $GITHUB_STEP_SUMMARY
-                  echo "" >> $GITHUB_STEP_SUMMARY
               fi
           done
           echo "issues_found=$found_issues" >> $GITHUB_OUTPUT
