@@ -184,6 +184,11 @@ jobs:
             multi_process: true
             xi_test: true
             startup_checks: true
+          - runner: macos-15
+            test_modules: false
+            multi_process: false
+            xi_test: true
+            startup_checks: true
           - runner: ubuntu-24.04
             test_modules: false
             multi_process: false
