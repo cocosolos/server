@@ -11,6 +11,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  Clang_Tidy:
+    name: Clang Tidy
+    uses: ./.github/workflows/runner_build.yml
+    with:
+      runner: ubuntu-24.04
+      compiler: clang
+      compiler_version: 18
+      build_type: Debug
+      tracy: false
+      build_modules: true
+      save_cache: true
+      upload_artifact: false
+      clang_tidy: true
+
   Runner_Build:
     name: ${{ matrix.save_cache && 'Cache Build' || 'Build' }}
     strategy:
@@ -19,7 +33,7 @@ jobs:
         include:
           - build_type: Release
             runner: windows-2025
-            compiler: msvc19
+            compiler: msvc
             tracy: false
             build_modules: false
             save_cache: false
@@ -27,7 +41,7 @@ jobs:
             clang_tidy: false
           - build_type: Debug
             runner: windows-2025
-            compiler: msvc19
+            compiler: msvc
             tracy: false
             build_modules: false
             save_cache: true
@@ -35,7 +49,7 @@ jobs:
             clang_tidy: false
           - build_type: Debug
             runner: macos-15
-            compiler: appleClang17
+            compiler: appleClang
             tracy: false
             build_modules: false
             save_cache: true
@@ -43,24 +57,18 @@ jobs:
             clang_tidy: false
           - build_type: Debug
             runner: ubuntu-24.04
-            compiler: gcc14
+            compiler: gcc
+            compiler_version: 14
             tracy: false
             build_modules: false
             save_cache: true
             upload_artifact: false
             clang_tidy: false
-          - build_type: Debug
-            runner: ubuntu-24.04
-            compiler: clang18
-            tracy: false
-            build_modules: true
-            save_cache: true
-            upload_artifact: false
-            clang_tidy: true
     uses: ./.github/workflows/runner_build.yml
     with:
       runner: ${{ matrix.runner }}
       compiler: ${{ matrix.compiler }}
+      compiler_version: ${{ matrix.compiler_version }}
       build_type: ${{ matrix.build_type }}
       build_modules: ${{ matrix.build_modules }}
       tracy: ${{ matrix.tracy }}

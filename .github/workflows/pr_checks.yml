@@ -133,7 +133,8 @@ jobs:
     uses: ./.github/workflows/runner_build.yml
     with:
       runner: ubuntu-24.04
-      compiler: clang18
+      compiler: clang
+      compiler_version: 18
       build_type: Debug
       build_modules: true
       tracy: false
@@ -150,20 +151,22 @@ jobs:
         include:
           - build_type: Debug
             runner: windows-2025
-            compiler: msvc19
+            compiler: msvc
             build_modules: false
           - build_type: Debug
             runner: macos-15
-            compiler: appleClang17
+            compiler: appleClang
             build_modules: false
           - build_type: Debug
             runner: ubuntu-24.04
-            compiler: gcc14
+            compiler: gcc
+            compiler_version: 14
             build_modules: false
     uses: ./.github/workflows/runner_build.yml
     with:
       runner: ${{ matrix.runner }}
       compiler: ${{ matrix.compiler }}
+      compiler_version: ${{ matrix.compiler_version }}
       build_type: ${{ matrix.build_type }}
       build_modules: ${{ matrix.build_modules }}
       upload_artifact: true
