@@ -134,9 +134,9 @@ jobs:
     with:
       runner: ubuntu-24.04
       compiler: clang
-      compiler_version: 18
+      compiler_version: 20
       build_type: Debug
-      build_modules: true
+      build_modules: false
       tracy: false
       upload_artifact: false
       clang_tidy: true
