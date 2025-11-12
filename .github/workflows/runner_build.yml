@@ -123,15 +123,12 @@ jobs:
         env:
           llvm_version: ${{ inputs.compiler_version && format('-{0}', inputs.compiler_version) || '' }}
         run: |
-          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet \
-            g++-14 \
-            clang${{ env.llvm_version }} \
-            clang-tidy${{ env.llvm_version }} \
-            libclang-rt${{ env.llvm_version }}-dev \
-            lld${{ env.llvm_version }} \
-            llvm${{ env.llvm_version }}-dev
-          echo "CC=/usr/bin/clang${{ env.llvm_version }}" >> $GITHUB_ENV
-          echo "CXX=/usr/bin/clang++${{ env.llvm_version }}" >> $GITHUB_ENV
+          sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet g++-14
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ inputs.compiler_version }} all
+          echo "CC=/usr/bin/${{ inputs.compiler_version && format('clang-{0}', inputs.compiler_version) || 'clang' }}" >> $GITHUB_ENV
+          echo "CXX=/usr/bin/${{ inputs.compiler_version && format('clang++-{0}', inputs.compiler_version) || 'clang++' }}" >> $GITHUB_ENV
           echo "CXXFLAGS=-stdlib=libstdc++" >> $GITHUB_ENV
           echo "LDFLAGS=-fuse-ld=lld" >> $GITHUB_ENV
 
