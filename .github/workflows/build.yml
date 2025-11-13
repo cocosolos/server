@@ -84,21 +84,26 @@ jobs:
         include:
           - build_type: Release
             os: ubuntu
-            compiler: gcc14
+            compiler: gcc
+            compiler_version: 14
+            clang_format_version: 20
             tracy: false
             build_modules: false
             save_cache: false
             publish: true
           # - build_type: Debug
           #   os: ubuntu
-          #   compiler: gcc14
+          #   compiler: gcc
+          #   compiler_version: 14
           #   tracy: false
           #   build_modules: false
           #   save_cache: true
           #   publish: false
           - build_type: Release
             os: alpine
-            compiler: clang20
+            compiler: clang
+            compiler_version: 20
+            clang_format_version: 20
             tracy: false
             build_modules: false
             save_cache: false
@@ -107,6 +112,8 @@ jobs:
     with:
       os: ${{ matrix.os }}
       compiler: ${{ matrix.compiler }}
+      compiler_version: ${{ matrix.compiler_version }}
+      clang_format_version: ${{ matrix.clang_format_version }}
       build_type: ${{ matrix.build_type }}
       save_cache: ${{ matrix.save_cache }}
       build_modules: ${{ matrix.build_modules }}

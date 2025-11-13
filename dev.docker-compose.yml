@@ -1,3 +1,11 @@
+# THIS FILE IS FOR DEVELOPMENT!
+#
+# Do not make changes to this file!
+# Use this file as a template and create a new docker-compose.yml
+# with your edits and additions.
+#
+# See docker/README.md and the Quick Start guide for instructions on running the server.
+
 x-dbcreds: &dbcreds
   MARIADB_DATABASE: xidb
   MARIADB_USER: xiadmin
@@ -55,14 +63,11 @@ services:
       dockerfile: docker/ubuntu.Dockerfile
       context: .
       args:
-        ENABLE_CLANG_TIDY: "ON"
-        UID: "1000"
-        GID: "1000"
         COMPILER: "clang"
         CMAKE_BUILD_TYPE: "Debug"
-        TRACY_ENABLE: "OFF"
         PCH_ENABLE: "OFF"
-    command: /bin/sh -c "python /server/tools/ci/summarize_clang_tidy.py build.log >> /server/log/clang_tidy_summary.md"
+        ENABLE_CLANG_TIDY: "ON"
+    command: /bin/sh -c "python /server/tools/ci/summarize_clang_tidy.py build.log > /server/log/clang_tidy_summary.md"
     volumes:
       - ./log:/server/log
 
@@ -72,11 +77,8 @@ services:
       dockerfile: docker/ubuntu.Dockerfile
       context: .
       args:
-        UID: "1000"
-        GID: "1000"
         COMPILER: "gcc"
         CMAKE_BUILD_TYPE: "Debug"
-        TRACY_ENABLE: "OFF"
         PCH_ENABLE: "OFF"
 
   setup_database:
