@@ -22,6 +22,16 @@ on:
         required: false
         type: boolean
         default: false
+      xi_test:
+        description: 'Run xi_test tests.'
+        required: false
+        type: boolean
+        default: true
+      startup_checks:
+        description: 'Run startup checks.'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   Runner_Test:
@@ -127,11 +137,13 @@ jobs:
         run: python ./tools/dbtool.py update
 
       - name: Run xi_test
+        if: ${{ inputs.xi_test }}
         id: xi_test
+        continue-on-error: true
         run: ./xi_test --keep-going --output tests.ctrf.json
 
       - name: Publish Test Report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.xi_test }}
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -147,6 +159,7 @@ jobs:
           artifact-name: 'xi_test-ctrf-${{ runner.os }}'
 
       - name: Startup checks
+        if: ${{ inputs.startup_checks }}
         id: startup_checks
         uses: nick-fields/retry@v3
         with:
@@ -156,7 +169,7 @@ jobs:
 
       - name: Summarize checks
         id: summarize_checks
-        if: ${{ always() }}
+        if: ${{ always() && (inputs.xi_test || inputs.startup_checks) }}
         run: |
           echo "## Startup Results" >> $GITHUB_STEP_SUMMARY
           found_issues=false

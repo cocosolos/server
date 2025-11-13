@@ -182,14 +182,20 @@ jobs:
           - runner: windows-2025
             test_modules: false
             multi_process: true
+            xi_test: true
+            startup_checks: true
           - runner: ubuntu-24.04
             test_modules: false
             multi_process: false
+            xi_test: true
+            startup_checks: true
     uses: ./.github/workflows/runner_test.yml
     with:
       runner: ${{ matrix.runner }}
       test_modules: ${{ matrix.test_modules }}
       multi_process: ${{ matrix.multi_process }}
+      xi_test: ${{ matrix.xi_test }}
+      startup_checks: ${{ matrix.startup_checks }}
 
   # Docker_Build:
   #   needs: Sanity_Checks
