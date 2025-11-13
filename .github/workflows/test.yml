@@ -94,8 +94,12 @@ jobs:
       multi_process: true
 
   Docker_Test:
-    name: Test
+    name: ${{ matrix.os && 'Test' || '' }} # GitHub Actions hack to hide matrix args
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, alpine]
     uses: ./.github/workflows/docker_test.yml
     with:
-      os: ubuntu
+      os: ${{ matrix.os }}
