@@ -84,11 +84,15 @@ jobs:
           exit 1
 
   Runner_Test:
-    name: Test
+    name: ${{ matrix.runner && 'Test' || '' }} # GitHub Actions hack to hide matrix args
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, macos-15]
     uses: ./.github/workflows/runner_test.yml
     with:
-      runner: windows-2025
+      runner: ${{ matrix.runner }}
       build_type: Release
       test_modules: false
       multi_process: true
