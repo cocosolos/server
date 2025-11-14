@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [windows-2025, macos-15]
+        runner: [windows-2025, macos-26]
     uses: ./.github/workflows/runner_test.yml
     with:
       runner: ${{ matrix.runner }}

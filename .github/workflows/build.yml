@@ -40,7 +40,7 @@ jobs:
             upload_artifact: true
             clang_tidy: false
           - build_type: Release
-            runner: macos-15
+            runner: macos-26
             compiler: appleClang
             tracy: false
             build_modules: false
@@ -56,7 +56,7 @@ jobs:
             upload_artifact: false
             clang_tidy: false
           - build_type: Debug
-            runner: macos-15
+            runner: macos-26
             compiler: appleClang
             tracy: false
             build_modules: false
