@@ -227,14 +227,6 @@ jobs:
         if: ${{ !inputs.optional_build || steps.check-changes.outputs.source_changes == 'true' }}
         run: cmake --build build | tee build.log
 
-      - name: Summarize Clang Tidy Build
-        if: ${{ inputs.clang_tidy && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
-        run: |
-          echo "## Clang Tidy Results" >> $GITHUB_STEP_SUMMARY
-          if [[ -f "build.log" && -s "build.log" ]]; then
-              python tools/ci/summarize_clang_tidy.py build.log >> $GITHUB_STEP_SUMMARY
-          fi
-
       - name: Upload artifact
         if: ${{ inputs.upload_artifact && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
         uses: actions/upload-artifact@v4
@@ -250,3 +242,14 @@ jobs:
         with:
           path: build
           key: ${{ steps.restore_build.outputs.cache-primary-key }}
+
+      - name: Summarize Clang Tidy Build
+        if: ${{ inputs.clang_tidy && (!inputs.optional_build || steps.check-changes.outputs.source_changes == 'true') }}
+        run: |
+          echo "## Clang Tidy Results" >> $GITHUB_STEP_SUMMARY
+          if [[ -f "build.log" && -s "build.log" ]]; then
+              python tools/ci/summarize_clang_tidy.py build.log >> $GITHUB_STEP_SUMMARY
+              if [[ $? -ne 0 ]]; then
+                  exit 1
+              fi
+          fi
