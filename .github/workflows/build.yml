@@ -93,8 +93,8 @@ jobs:
           - build_type: Release
             os: ubuntu
             compiler: gcc
-            compiler_version: 14
-            clang_format_version: 20
+            compiler_version: 15
+            clang_format_version: 21
             tracy: false
             build_modules: false
             save_cache: false
