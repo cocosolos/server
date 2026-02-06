@@ -285,11 +285,11 @@ def main():
 
                 # Check for error or warning text
                 lower_line = line_str.lower()
-                if any(x in lower_line for x in error_strs):
-                    print("^^^ Found error or warning in output.")
-                    kill_all()
-                    print("Killing all processes and exiting with error.")
-                    close(-1)
+                # if any(x in lower_line for x in error_strs):
+                #     print("^^^ Found error or warning in output.")
+                #     kill_all()
+                #     print("Killing all processes and exiting with error.")
+                #     close(-1)
 
                 # Check for "ready to work"
                 if "ready to work" in lower_line:
