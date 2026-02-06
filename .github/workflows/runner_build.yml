@@ -156,7 +156,12 @@ jobs:
           sudo apt-get update && sudo apt-get install --assume-yes --no-install-recommends --quiet g++${{ env.gcc_version }}
           echo "CC=/usr/bin/gcc${{ env.gcc_version }}" >> $GITHUB_ENV
           echo "CXX=/usr/bin/g++${{ env.gcc_version }}" >> $GITHUB_ENV
-
+          if [[ "${{ inputs.build_type }}" == "Debug" ]]; then
+              echo "CFLAGS=-fsanitize=address -fsanitize=leak -fsanitize=undefined" >> $GITHUB_ENV
+              echo "CXXFLAGS=-fsanitize=address -fsanitize=leak -fsanitize=undefined" >> $GITHUB_ENV
+              echo "LDFLAGS=-fsanitize=address -fsanitize=leak -fsanitize=undefined" >> $GITHUB_ENV
+              echo "UBSAN_OPTIONS=print_stacktrace=1" >> $GITHUB_ENV
+          fi
       - name: Setup Clang (Linux)
         if: ${{ runner.os == 'Linux' && startsWith(inputs.compiler, 'clang') && env.SKIP_BUILD != 'true' }}
         env:
