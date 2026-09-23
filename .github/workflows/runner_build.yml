@@ -250,6 +250,7 @@ jobs:
             -DTRACY_ENABLE=${{ inputs.tracy && 'ON' || 'OFF' }} \
             -DPCH_ENABLE=${{ inputs.build_type == 'Debug' && 'OFF' || 'ON' }} \
             ${{ (runner.os == 'macOS' && startsWith(inputs.compiler, 'clang')) && '-DCMAKE_AR=$AR -DCMAKE_RANLIB=$RANLIB -DCMAKE_NM=$NM ' || '' }} \
+            ${{ (runner.os == 'Windows' && inputs.save_cache) && '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded ' || '' }} \
             -DCACHE_OPTION=sccache
 
       - name: Build
